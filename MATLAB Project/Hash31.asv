@@ -1,0 +1,15 @@
+%% Hash31 Function
+% Calculates a hash value from an array of values 
+%
+% Author: Anish Hota
+
+% function with input a (an input array) and an output a
+function h = Hash31 (a)
+% sets h to 0
+h = 0;
+% for loop that 
+for i = 1: length(a)
+    h = a(i) + 31.*h;
+    h = mod(h, 1048576);
+    i = i+1;
+end

@@ -1,0 +1,92 @@
+---
+title: "Assignment 1 STATS 330"
+author: "Anish Hota"
+date: "2025-03-26"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r include=FALSE}
+require(s20x)
+```
+
+## Plot
+
+```{r, out.width = "70%", fig.align = 'center'}
+PPW.df <- read.csv("PPW.csv")
+plot(Wt~Ht, type="n",data=PPW.df)
+text(Wt~Ht, labels=substr(How,1,1),
+     col=ifelse(How=="Drown","blue", "brown"),
+     data=PPW.df, cex=0.9, font=2)
+points(196,1125,pch = "P", col = "orange")
+
+```
+The point P is the height and weight of lungs of the person who got killed in this case, this is why it is essential to look at this point when inspecting the data.
+
+## Model Building and Check Assumptions
+```{r, out.width = "70%", fig.align = 'center'}
+PPW.fit <- lm (Wt ~Ht, data = PPW.df)
+plot(PPW.fit)
+normcheck(PPW.fit)
+cooks20x(PPW.fit)
+summary(PPW.fit)
+```
+The data seems to be normalized and there are no outstanding points in data. So all assumptions are satisfied. The data explains 71.2% of the data.
+
+## Fitted Model
+```{r, out.width = "70%", fig.align = 'center'}
+plot(Wt~Ht, type="n",data=PPW.df)
+text(Wt~Ht, labels=substr(How,1,1),
+     col=ifelse(How=="Drown","blue", "brown"),
+     data=PPW.df, cex=0.9, font=2)
+points(196,1125,pch = "P", col = "orange")
+abline(PPW.fit, col ="blue", lty = 2)
+```
+This data shows that there is a positive increase in weight compared to height. This relates to our case as we are seeing if the height of the man got killed could have an effect of how he died, as he was a pretty tall man.
+
+## Prediction model
+```{r, out.width = "70%", fig.align = 'center'}
+plot(Wt~Ht, type="n",data=PPW.df)
+text(Wt~Ht, labels=substr(How,1,1),
+     col=ifelse(How=="Drown","blue", "brown"),
+     data=PPW.df, cex=0.9, font=2)
+points(196,1125,pch = "P", col = "orange")
+abline(PPW.fit, col ="blue", lty = 2)
+preddata <- data.frame(Ht = c(196,196))
+preds <- predict(PPW.fit, preddata, interval = "prediction")
+segments(196-.5,preds[1,2], 196-.5, preds[1,3], col="green")
+segments(196+.5,preds[2,2], 196+.5, preds[2,3], col="blue")
+```
+This prediction interval shows the person in question and compares this person weight and height to other people in this data and checks to see if there are any similar traits.
+
+## GLM
+```{r, out.width = "70%", fig.align = 'center'}
+glm.model <- glm(Wt ~Ht, data = PPW.df)
+summary(glm.model)
+sqrt(deviance(glm.model)) / df.residual(glm.model)
+1 - sum(resid(glm.model)^2) / sum((PPW.df$Wt - mean(PPW.df$Wt))^2)
+```
+
+# Binomial Logit model
+```{r}
+PPW.df$Hung <- ifelse(PPW.df$How == "Hung",1,0)
+logitmodel <- glm(Hung ~ Ht + Wt, data = PPW.df, family = "binomial")
+summary(logitmodel)
+```
+# Prediction for PPW
+```{r}
+ppwcase <- data.frame(Ht = 196, Wt = 1125)
+
+pred <- predict(logitmodel, newdata = ppwcase, type = "link", se.fit = TRUE)
+
+lower <- pred$fit - 1.96 * pred$se.fit
+upper <- pred$fit + 1.96 * pred$se.fit
+round(c(plogis(lower), plogis(pred$fit), plogis(upper)), 3)
+```
+This shows the probability that PPW was hung rather than drowned. It proves that the probability that PPW was hung is between 32.5% and 72.5%.
+
+## Final Statement
+
+The probability suggest that there is a high chance that he was hung meaning that means that we can not favour the defense and therefore they can be proven guitly based on these statistics.
+

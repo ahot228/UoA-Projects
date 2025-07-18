@@ -1,0 +1,6 @@
+function [m, pos] = RightMin(array)
+
+for i = 1:length(array)
+    ≈
+    pos = i(m);
+end

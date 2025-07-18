@@ -1,0 +1,255 @@
+---
+title: "Assignment 2 STATS 330"
+author: "Anish Hota"
+date: "2025-04-13"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r include=FALSE}
+require(s20x)
+```
+
+# Mean and Vairance Analysis
+
+```{r, out.width = "70%", fig.align = 'center'}
+Visits.df <- read.csv("Visits.csv")
+mean(Visits.df$visits)
+var(Visits.df$visits)
+observed=table(Visits.df$visits)
+observed
+n=sum(observed)
+n
+```
+As we can see by th output the variance is much larger than the mean, so there is over dispersion. Since the Poisson model assumes that the mean equals variance, this model is not a good fit for this set of data.
+
+# Fitting Poisson Model
+
+```{r, out.width = "70%", fig.align = 'center'}
+fit1<- glm(visits~1,family=poisson,data=Visits.df)
+```
+
+The intercept is $\beta_0 = log(\mu)$.
+
+# Poisson Graph
+
+```{r, out.width = "70%", fig.align = 'center'}
+x=as.numeric(names(observed))
+expected.Pois=n*dpois(x, lambda=exp(coef(fit1)))
+plot(x,observed, type="h",lwd=1, lend="butt", xlab="# of visits",
+ylab="count of visits",
+main="Observed vs Poisson expected counts",
+xlim=range(x), ylim= c(0, max(observed,expected.Pois)))
+lines(x+.2, expected.Pois,type="h",
+lwd=1, lend="butt",col="red")
+legend("topright", fill=c("black","red"),
+legend=c("observed","expected"))
+```
+As you can see the red and blue bars don't match closely meaning that this model doesn't fit well.
+
+# Poisson Variance
+
+```{r, out.width = "70%", fig.align = 'center'}
+poi_variance <- exp(coef(fit1))
+poi_tail_probability <- ppois(12,lambda = poi_variance, lower.tail = FALSE)
+poi_tail <- sum(Visits.df$visits >12)/n
+poi_variance
+var(Visits.df$visits)
+poi_tail_probability
+poi_tail
+```
+Since the sample variance is larger than the poisson variance this suggests over dispersion. Since the predicted tail larger than 12 is larger than the observed it shows that there is a lack of fit.
+
+# Expected Counts for Poisson Model
+
+```{r, out.width = "70%", fig.align = 'center'}
+## inspecting the data>>=
+Egt5=expected.Pois>=5
+# note ! is R's way of saying NOT
+E.Pois=c(expected.Pois[Egt5], sum(expected.Pois[!Egt5]))
+O.Pois=c(observed[Egt5], sum(observed[!Egt5]))
+E.Pois
+J <- length(E.Pois)
+J
+```
+There is one parameter(the mean) so p = 1 and J = 16
+
+# Chi-Squared for Poisson
+
+```{r, out.width = "70%", fig.align = 'center'}
+chisq <- sum((O.Pois - E.Pois)^2/E.Pois)
+p_value <- pchisq(chisq, df = J - 1, lower.tail = FALSE)
+chisq
+p_value
+```
+p-value is less than 0.05 so the Poisson model doesn't fit very well.
+
+# Negative Binomial Fit
+
+```{r, out.width = "70%", fig.align = 'center'}
+library(MASS)
+fit2 <- glm.nb(visits ~ 1, data = Visits.df)
+summary(fit2)
+mean_nb <- exp(coef(fit2))
+mean_nb
+```
+Theta is small so overdispersion is high.
+
+
+# Negative Binomial Graph
+
+```{r, out.width = "70%", fig.align = 'center'}
+x=as.numeric(names(observed))
+theta_hat <- fit2$theta
+expected.nb=n*dnbinom(x, mu = mean_nb, size = theta_hat)
+plot(x,observed, type="h",lwd=1, lend="butt", xlab="# of visits",
+ylab="count of visits",
+main="Observed vs Negatvie Binomial expected counts",
+xlim=range(x), ylim= c(0, max(observed,expected.nb)))
+lines(x+.2, expected.nb,type="h",
+lwd=1, lend="butt",col="red")
+legend("topright", fill=c("black","red"),
+legend=c("observed","expected"))
+```
+The black and red bars in this model is very similar so the NB model is a much better fit.
+
+# Negtaive Binomial Variance
+
+```{r, out.width = "70%", fig.align = 'center'}
+nb_variance <- mean_nb * (1+mean_nb/theta_hat)
+nb_tail_probability <- pnbinom(12,mu = mean_nb,size = theta_hat ,lower.tail = FALSE)
+nb_tail <- sum(Visits.df$visits >12)/n
+nb_variance
+var(Visits.df$visits)
+nb_tail_probability
+nb_tail
+```
+The variances and tails are very similar to each other meaning that the NB model is much better fit
+
+# Expected Counts for NB Model
+
+```{r, out.width = "70%", fig.align = 'center'}
+## inspecting the data>>=
+Egt5_nb=expected.nb>=5
+# note ! is R's way of saying NOT
+E.nb=c(expected.nb[Egt5_nb], sum(expected.nb[!Egt5_nb]))
+O.nb=c(observed[Egt5_nb], sum(observed[!Egt5_nb]))
+E.nb
+J_nb <- length(E.nb)
+J_nb
+```
+p_nb = 2 cause we got mean and dispersion, and J = 32
+
+# Chi-Squared for NB
+
+```{r, out.width = "70%", fig.align = 'center'}
+chisq_nb <- sum((O.nb - E.nb)^2/E.nb)
+p_value_nb <- pchisq(chisq_nb, df = J_nb - 2, lower.tail = FALSE)
+chisq_nb
+p_value_nb
+```
+The p-value is very large so the NB model is a very good fit for this data and much better than the Poisson model.
+
+# Caffeine Model
+
+```{r, out.width = "70%", fig.align = 'center'}
+Caffeine.df=read.csv("Caffeine.csv")
+## null model
+mod.null=glm(cbind(Agrade,n-Agrade)~1, family=binomial, data =Caffeine.df)
+## linear log-odds model
+mod1=glm(cbind(Agrade,n-Agrade)~caffeine, family=binomial, data =Caffeine.df)
+summary(mod1)
+1-pchisq(deviance(mod1), df.residual(mod1))
+plot(mod1, which=1)
+```
+We have a model for the log-odds of getting an A-grade based on the amount of caffeine consumed. We have a small p-value (less than 0.05) so this model isn't a good fit.  The residuals are not constant so no EOV.
+
+# Likelihood Function and Saturated Model
+
+```{r, out.width = "70%", fig.align = 'center'}
+LLcaffeine=function(p,n=Caffeine.df$n, y=Caffeine.df$Agrade){
+out=y*log(p)+(n-y)*log(1-p)
+# log(0) adds zero to LL
+out[is.na(out)]=0
+out
+}
+ps <- Caffeine.df$Agrade / Caffeine.df$n
+LL_saturated <- LLcaffeine(ps)
+LL_saturated
+```
+
+# Likelihhod Function in Null Model
+
+```{r, out.width = "70%", fig.align = 'center'}
+p0 <- fitted(mod.null)
+LL_null <- LLcaffeine(rep(p0[1], nrow(Caffeine.df)))
+LL_null
+```
+
+# Null Deviance
+
+```{r, out.width = "70%", fig.align = 'center'}
+null_deviance <- (-2) * (sum(LL_null) - sum(LL_saturated))
+null_deviance
+mod1$null.deviance
+```
+
+# Likelihood in Linear Caffeine Model
+
+```{r, out.width = "70%", fig.align = 'center'}
+preds <- fitted(mod1)
+LL_model <- LLcaffeine(preds)
+LL_model
+```
+
+# Residual Deviance
+
+```{r, out.width = "70%", fig.align = 'center'}
+residual_deviance <- (-2) * (sum(LL_model)-sum(LL_saturated))
+residual_deviance
+mod1$deviance
+```
+
+# Pearson Residuals
+
+```{r, out.width = "70%", fig.align = 'center'}
+observed <- Caffeine.df$Agrade
+expected <- preds * Caffeine.df$n
+residual_pearson <- (observed - expected) / sqrt(expected * (1 - preds))
+residual_pearson
+residuals(mod1, type = "pearson")
+```
+
+# Quasi-Binomial Model
+
+```{r, out.width = "70%", fig.align = 'center'}
+mod2 <- glm(cbind(Agrade, n-Agrade) ~ caffeine, family = quasibinomial, data = Caffeine.df)
+pearson_residuals <- residuals(mod1, type = "pearson")
+dispersion_k <- sum(pearson_residuals^2) / df.residual(mod1)
+summary(mod2)
+dispersion_k
+```
+
+# Plot of Proportions of A-Grades
+
+```{r, out.width = "70%", fig.align = 'center'}
+A_grades <- Caffeine.df$Agrade / Caffeine.df$n
+plot(Caffeine.df$caffeine, A_grades, xlab = "Caffeine (mg)", ylab = "Proportion of A Grades", main = "A Grade Proportion vs Caffeine")
+```
+It seems that at around 100mg of Caffeine is the most optimal amount for getting an A Grade and once you start have more than this amount it gets lower and lower.
+
+# New Model
+
+```{r, out.width = "70%", fig.align = 'center'}
+mod3 <- glm(cbind(Agrade, n-Agrade) ~ caffeine + I(caffeine^2), family = binomial, data = Caffeine.df)
+summary(mod3)
+1 - pchisq(deviance(mod3), df.residual(mod3))
+anova(mod1, mod3, test = "Chisq")
+```
+The p-value is very low for the squared term so it is significant and a better fit for this data. This allows for a parabola shaped graph to exist.
+
+# Executive Summary
+
+The first model used was a linear model which seemed to have poor fit for the data given. There was over dispersion and lack of consistent residuals. After using a quasi-binomial model however we had a much better fit and could easily compare the A grades to the caffeine intake, we were able to see that at 100mg of caffeine, this was the most potimal point of getting an A grade.
+

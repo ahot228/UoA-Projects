@@ -1,0 +1,56 @@
+---
+title: "Creating images with R"
+author: "Anish Hota"
+subtitle: My Car
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, message=FALSE, warning=FALSE, error=FALSE)
+```
+
+```{css}
+body {font-weight: bold}
+p{background-color: ##FFA500}
+p{color:#0000FF}
+```
+
+## Project requirements
+![Screenshot: ](/Users/anish/Desktop/stats220/Project1/Screenshot.png)
+[My Github stats220c repo](https://github.com/ahot228/stats220)
+
+## Inspo meme
+![inspo](/Users/anish/Desktop/inspo_meme.png)
+
+## My meme
+![](/Users/anish/Desktop/stats220/Project1/my_meme.png)
+
+I just changed the image of this meme as the other image I feel didn't make as much sense as this one does.
+
+## My animated meme 
+
+![](/Users/anish/Desktop/stats220/Project1/my_animated_meme.gif)
+
+## Creativity
+  
+My project demonstrates creativity as I have use different ideas than the ones that were used in the labs. For example my animated GIF I used image_composite in order to allow the text and GIF to work at the same time. I also made the text a background instead of stack the two with append.
+
+## Learning reflection
+
+I learned that the magick package is a very useful tool in order to make and produce memes that we see all the time. It is also very easy to use and understand and is able to present images and text very well. I liked that we were able to created little animations using just code and how simple and efficient the R coding was able to do this. I am excited to see how many different things we can code using R and how we can utilize html and markdown files to present different and cool ideas. I would love to learn more coding and more innovative ideas that can help different aspects of the real world.
+
+## Appendix
+
+<mark>Do not change, edit, or remove the `R` chunk included below.</mark> 
+
+If you are working within RStudio and within your Project1 RStudio project (check the top right-hand corner says "Project1"), then the code from the `meme.R` script will be displayed below.
+
+This code needs to be visible for your project to be marked appropriately, as some of the criteria are based on this code being submitted.
+
+
+```{r file='meme.R', eval=FALSE, echo=TRUE}
+
+```
+

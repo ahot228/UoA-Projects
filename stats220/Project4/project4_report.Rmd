@@ -1,0 +1,27 @@
+---
+title: "Project 4"
+subtitle: "STATS 220 Semester One 2025"
+author: "Anish Hota"
+date: "2025-04-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+The focus for this data collection was to determine what Steak is the most popular when ordering at a restaurant. I analysed the what type of steak, what the cook of the steak was and what sauce is the most popular. I was the only one involved the the recording process but the customers at the restaurant gave me the data for this project. I chose these charts as it best represented my data with the columns for the steak count and the density for the temperature, it looks the best in the long run. I tried to use the timestamps but I was unable to correctly convert it to dat-time variables, it kept coming up with an NA response when mutating the data.
+
+## Visual Data Story
+[Github Page](https://ahot228.github.io/stats220/visual_data_story.html)
+
+This demonstrates creativity as I put effort into slelecting the themes for the graphs and I also used the steak count for the column graph which I believe demonstrates creativity as I came up with the idea of using a steak count to better compare the different steak types.
+## Learning Reflection
+I learned that we can use our data to create some very interesting graphs and that we can compare more things than we did in project 2. I was able to count the steaks individually and then display it on a graph to compare the steaks which I wasn't able to look at in the other project. I want to learn more about graphs and if there is anything else we can do in R to better visualise the graphs and make them more informative and appealing.
+
+## Appendix
+```{r file='data_visualisation.R', eval=FALSE, echo=TRUE}
+
+```
+

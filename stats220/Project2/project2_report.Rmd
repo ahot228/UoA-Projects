@@ -1,0 +1,32 @@
+---
+title: "Project 2"
+subtitle: "STATS 220 Semester One 2025"
+author: "Anish Hota"
+date: "2025-04-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+The focus for this data collection was to determine what Steak is the most popular when ordering at a restaurant. I analysed the what type of steak, what the cook of the steak was and what sauce is the most popular. I only used three questions for this form; what steak they ordered, what sauce they ordered and what temperature it was cooked. I believe this was the only information that was needed to conduct this survey, which follows guideline 3. From this data I believe I can figure out what the optimal steak and sauce combination is and think about how I can use this to satisfy the most people with the optimal steak choice. [Google Sheets Form](https://docs.google.com/forms/d/e/1FAIpQLSfJuusS8FSZ_ziTNUWJPotzFAWvQO2rG-WxEj7h27qz2yL0eQ/viewform?usp=header)
+
+## Dynamic Report
+[Github Page](https://ahot228.github.io/stats220/)
+
+## Creativity
+I demonstrated the use of creativity by using more graphs then the minimum graphs that are needed. I also use creativity by using an idea that is not your usual topic and something that relates to me. The fact that I used my part-time job to observe data rather than something in my daily routine shows that I put some thought into my topic and picked something that I would be interested in analyzing. I also used colour in my graphs to make it more appealing and make my dynamic report look better.
+
+## Learning Reflection
+I learned that we can create dynamic graphs and text by just using google forms. I never knew that we could use google forms to produce something that we can analyze as well as learn something from. I knew that we can get stats and trends from the responses received but I didn't know we could use it in R and analyze the data further than what we see in google forms. In the future I wish to learn more ways to analyze the data like I was unable to compare the steak and sauces side by side on a bar graph or the temperature and steak side by side. IN the future I would like to learn how we can incorporate two different variables in the same graph so I can better compare what is the most optimal steak and sauce combination.
+
+## Appendix
+```{r file='exploration.R', eval=FALSE, echo=TRUE}
+
+```
+```{r file='dynamic_report.Rmd', eval=FALSE, echo=TRUE}
+
+```
+

@@ -1,0 +1,36 @@
+---
+title: "Project 5"
+subtitle: "STATS 220 Semester One 2025"
+author: "Anish Hota"
+date: "2025-04-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+The schools I chose for my reference data, is Secondary schools in the Wellington region. I chose this for my reference as this was what I went to in high school, as I went toe Wellington College I thought I would do a reference of around 40 variables that included the high school that I went to. My high school's website seems to be web scraping friendly and there seems to be no terms and conditions page to say otherwise, so it seems that it would be responsible to scrape the data from the school website.
+
+## Visualisation
+The main purpose of this visualisation was to compare secondary schools in the Wellington region and how the number of school operations differed wihtin each of these schools.
+![My Visualisation](/Users/anish/Desktop/stats220/Project5/my_viz.png)
+
+## Creativity
+My visualisation develops creativity as I used an external function called plot.title to change the placement of the title in the image, which was not in the course. I used this tool as my title was too big and wasn't fitting on the graph properly, with this change the title is clear and can be seen clearly. I also used a contrasting colour palette and informative labels for my axis to make my graph more presentable.
+
+## Learning Reflection
+I learned that we can combine two csv files or data frames to compare data from two different data sets that have somewhat similar data. This was fascinating as I was able to learn how we can integrate data from two different data frames and join into one so that we can visualise these data together and further compare these data sets. I wish to learn how we can use the idea of combining data to further see how we can compare data, how we can use data from two very different data sets (data sets that don't share any common values) and combine together to compare something of interest and if it is even possible to do so.
+
+## Self Review
+I have learned many things including extracting data from forms and making them into csv files, and then using these csv files to create informative and colourful graph that can compare data that I have collected from observations that I made. I also learned how to create memes which I was never sure how to do before, it allowed me to construct memes using R code and tap into my creative side to come up with some funny jokes from images that I have found on the internet. So two key skills that I have learned is that you can take notes of data from observations you've made (google forms) and use this data to create grahs to compare these observations, as well as use images to create memes and make entertainment through the use of just R code.
+
+## Appendix
+```{r file='data_sources.R', eval=FALSE, echo=TRUE}
+
+```
+```{r file='visualisation.R', eval=FALSE, echo=TRUE}
+
+```
+

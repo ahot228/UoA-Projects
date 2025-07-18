@@ -1,0 +1,13 @@
+%% K-Gram
+% Take a string and divide it into a sequence of k-grams, where each element is k characters long. 
+
+function cellarray = Kgram(k, string)
+
+i = 1;
+if k > length(string)
+    cellarray = {string};
+end
+while i+(k-1) <= length(string)
+    cellarray{i} = (string(i:i+(k-1)));
+    i=i+1;
+end

@@ -1,0 +1,14 @@
+%% 
+
+function [indices] = FindMatchIndices(a, b)
+
+indices = [];
+
+for i = 1:length(a)
+    compare = strfind(b, a(i));
+    if compare > 0
+        indices(i) = i;
+        indices = nonzeros(indices);
+        indices = indices';
+    end
+end
