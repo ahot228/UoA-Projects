@@ -1,0 +1,245 @@
+---
+title: "STATS 201/8 Assignment 5"
+author: 'Anish Hota ahot228'
+date: 'Due Date: 3pm Thursday 10th October'
+output:
+  pdf_document: 
+    number_sections: yes
+  html_document:
+    fig_caption: yes
+    number_sections: yes
+  word_document: 
+    number_sections: yes
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.height=3)
+```
+```{r setup, echo=FALSE, warning=FALSE}
+## Do not delete this! It loads the s20x library for you. 
+## NOTE: for this assignment you need to update the s20x library to the latest
+## version. Run install.packages("s20x") before starting this assignment
+## (you only need to do this once).
+library(s20x)
+```
+
+# Question 1 [15 Marks]
+
+Counts of kelpfish (*Chironemus marmoratus*, or hiwihiwi) were made by diver surveys in Doubtless Bay, Northland, New Zealand. Dives were made at 55 randomly selected locations. 
+
+A researcher was interested in whether the count of hiwihiwi is influenced by depth. They wanted to know what the effect of the first 15 metres of depth was on hiwihiwi counts and also it is of interest to determine if there is an optimal depth at which the expected count of hiwihiwi is highest.
+
+This data can be found in the file KelpFish.csv, and includes variables:
+
+Variable   | Description
+-----------|----------------------------------------------
+Count      | The number of hiwihiwi seen by SCUBA divers swimming a 25 metre transect over reef habitat.
+Depth      | The depth (in metres) of the dive.
+
+
+**Instructions:**
+
+*	Make sure you change your name and UPI/ID number at the top of the assignment.
+*	Comment on the plots.
+*	Fit an appropriate Poisson GLM modelling the number of hiwihiwi seen as counts for dives to a maximum of 15 metres. Generate confidence interval output for this model. Hint: As in the plot commands, replace the data statement with: `data=subset(Hiwi.df,Depth<=15)`
+* Write a sentences as if for an *Executive Summary* estimating the effect of an additional 1 metre depth on the abundance of hiwihiwi (for the first 15 metres of depth).
+* Using all the data, fit an appropriate Poisson GLM modelling the number of hiwihiwi seen as counts. 
+* Create a plot of all the data with the model superimposed over it.
+* Generate prediction output to estimate the depth (to within the nearest 0.5 m) at which the expected count of hiwihiwi is highest. No confidence interval is required. 
+* State what the depth at which the expected count of hiwihiwi is estimated to be the highest.
+* Write the fitted model as if for the *Methods and Assumption Checks*.
+
+
+## Questions of Interest:
+
+It was of interest to determine whether the count of hiwihiwi is influenced by depth. In particular, it is of interest to determine if there is an optimal depth at which the expected count of hiwihiwi is highest.
+
+
+## Read in and inspect the data:
+
+```{r,fig.height=4.6,fig.width=6.5}
+Hiwi.df=read.csv("KelpFish.csv")
+plot(Count~Depth,main="Data for dives to 15 mteres only", data=subset(Hiwi.df,Depth<=15) )
+plot(Count~Depth,main="All Data",data=Hiwi.df) 
+```
+
+## Comment on the plots:
+There seems to be a general increase of count of fish to the increase in depth (a positive relationship), in the first 15 meters, more of a exponential curve. Looking at all the data the count seems to much higher around the the 13-15m level and lower on the other levels, creating a parabola sort of shape. Variability seems toe be generally good with slightly more data at the deeper levels.
+
+## Fit an appropriate Poisson GLM modelling the number of hiwihiwi seen as counts for dives to a maximum of 15 metres. Generate confidence interval output for this model. Hint: As in the plot commands, replace the data statement with: data=subset(Hiwi.df,Depth<=15)
+```{r,fig.height=4,fig.width=6.5}
+  Hiwi.gfit = glm(Count~Depth, family = poisson, data=subset(Hiwi.df,Depth<=15))
+  plot(Hiwi.gfit, which = 1)
+  summary(Hiwi.gfit)
+  confint(Hiwi.gfit)
+```
+
+
+## Write a sentences as if for an *Executive Summary* estimating the effect of an additional 1 metre depth on the abundance of hiwihiwi (for the first 15 metres of depth).
+
+We estimate that with an additional 1 metre depth on the abundance of hiwihiwi (for the first 15 metres ), the odds of an increase in fish count is between 6.06% and 21.40%.
+
+## Using all the data, fit an appropriate Poisson GLM modelling the number of hiwihiwi seen as counts. 
+```{r,fig.height=4,fig.width=6.5}
+  Hiwi.gfit1 = glm(Count~Depth,family = poisson, data=Hiwi.df)
+  plot(Hiwi.gfit1,which = 1)
+```
+
+## Create a plot of all the data with the model superimposed over it. 
+```{r,fig.height=5,fig.width=8,warning=FALSE}
+plot(Count~Depth,main="All Data",data=Hiwi.df) 
+abline(Hiwi.gfit1)
+```
+
+## Generate prediction output to estimate the depth (to within the nearest 0.5 m) at which the expected count of hiwihiwi is highest. No confidence interval is required. 
+```{r}
+depth_range <- seq(min(Hiwi.df$Depth), max(Hiwi.df$Depth))
+predHiwi.df <- data.frame(Depth = depth_range)
+predictcount <- predict(Hiwi.gfit1, newdata = predHiwi.df, type = "response")
+maxdepth <- depth_range[which.max(predictcount)]
+```
+
+## State what the depth at which the expected count of hiwihiwi is estimated to be the highest.
+
+The depth at which the count is predicted to be the highest is 2.5 metres.
+
+
+## Write the fitted model as if for the *Methods and Assumption Checks*.
+The response variable, is a count, so we fitted a generalised linear model with a Poisson response distribution. We have one explanatory variable Depth. The scatterplot of Depth vs Count showed an exponentially increasing trend for both locations. We fitted a Poisson model with
+interaction between depth and count.
+
+
+
+
+****
+
+
+# Question 2 [19 Marks]
+
+Sniffer dogs, also called detector dogs, are used in New Zealand airports to detect contraband items such as drugs or fruit that cannot be brought into the country undeclared. Researchers aimed to assess how close the detector dogs needed to be to contraband items to detect them successfully. They used two dogs, named Alfie and Bert, both of whom were beagles trained for contraband detection. Contraband items were concealed at distances ranging from 0 to 20 metres away from a walked route through an airport luggage collection hall. Gaps between items were random, and the ordering of near and far items was randomized, to avoid the dogs picking up on patterns in concealed items. Alfie and Bert were walked along the route one day apart to ensure they were not influenced by each other’s scents. The success or failure of each dog at detecting each item was recorded.
+
+The data can be found in the file Dog.csv, with variables:
+
+Variable   | Description
+-----------|-------------------------------------------------------
+detect     | Whether the dog succeeded (1) or failed (0) to detect the item. 
+distance   | Distance, in metres, of the concealed item from the dog’s route.
+dogName    | Name of the dog (Alfie or Bert).
+
+
+We want to: 
+
+*	assess a dog’s detection ability over different distances.
+*	assess whether there were differences in this relationship between the different dogs.
+*	more specifically, what was the detection probability at distances of 0, 5, 10, 15, and 20 metres?
+* and, at what distance did the dogs detect only half of the contraband items?
+
+
+**Instructions:**
+
+*	Comment on the two plots of the data.
+* We have provided output for three models. Choose the most appropriate of these models for the data and generate confidence interval and prediction output required.
+* Why did we **not** need to test for overdispersion on this data?
+* Write the fitted model as if for the *Methods and Assumption Checks*.
+* Was the any evidence that the detection ability differed between the two dogs or that how their detection ability changed at different distances differed? Justify your answer including relevant P-values.
+* If we were to superimpose our model onto the plot of the  data, would it look like (a) one single line, (b) two parallel lines, (c) two non-parallel lines, (d) one S-curve, (e) two parallel S-curves, or (f) two non-parallel S-curves. **Justify your answer.**
+* Write a sentences as if for an *Executive Summary* estimating the effect of a 1 metre increase in distance on the dog’s detection ability.
+* What are the detection probabilities at 0, 5, 10, 15, and 20 metres? **Note:** Report point estimates only. You do not need to calculate confidence intervals.
+* At what distance did the dogs detect only half of the contraband items?
+
+
+## Questions of Interest:
+
+We wish to study the ability of sniffer dogs to detect contraband
+items from various distances away.  We also wish to assess evidence
+for different abilities among the two dogs in the study, and to
+quantify the probability of detection for items at various distances.
+
+## Read in and inspect the data:
+
+```{r,fig.height=4.4,fig.width=6}
+dog.df = read.csv("Dog.csv", stringsAsFactors=TRUE)
+head(dog.df)
+tail(dog.df)
+# For clarity, plot Alfie's results slightly below 0 and 1, and Bert's results slightly above:
+with(dog.df[dog.df$dogName=="Alfie",], plot(distance, detect-0.03, pch="A", ylim=c(-0.1, 1.1), yaxt="n", ylab="detection outcome"))
+with(dog.df[dog.df$dogName=="Bert",], points(distance, detect+0.03, pch="B", col=2))
+axis(2, at=c(0, 1), las=1)
+
+```
+
+## Comment on the plot:
+
+The dogs in general tend to not detect food when the distance is further away. There seems to be not much difference between the two dogs when it comes to detection, although it seems that Bert can detect at a generally higher distance than Alfie.
+
+
+
+
+## Fit three models and generate summary output
+```{r}
+dog.fit1 <- glm(detect ~ distance * dogName, family=binomial, data=dog.df)
+summary(dog.fit1)
+
+dog.fit2 <- glm(detect ~ distance + dogName, family=binomial, data=dog.df)
+summary(dog.fit2)
+
+dog.fit3 <- glm(detect ~ distance, family=binomial, data=dog.df)
+summary(dog.fit3)
+```
+
+
+## Generate inference and prediction output from cheosen model
+
+```{r,fig.height=3.5,fig.width=5}
+summary(dog.fit1)
+confint(dog.fit2)
+predictGLM(dog.fit3, data.frame(distance = c(0,5,10,15,20)),type="repsonse")
+```
+
+## Why did we **not** need to test for overdispersion on this data?
+ Our data is also a binomial model meaning that overdispersion check is not needed ( It is not a Poisson model so there is most likely not really any overdispersion).
+
+
+
+## Write the fitted model as if for the *Methods and Assumption Checks*.
+
+The data recorded was whether or not each dog would detect food at different distances. Therefore we fitted a Binomial GLM model with a single predictor of detection. The response was treated as grouped data, with each group responding to a distance.
+
+
+
+
+## Was the any evidence that the detection ability differed between the two dogs or that how their detection ability changed at different distances differed? Justify your answer including relevant P-values.
+There is no evidence that there was a difference in detection ability between the two dogs, with a large p-value of 0.3657.
+
+
+
+
+## If we were to superimpose our model onto the plot of the  data, would it look like (a) one single line, (b) two parallel lines, (c) two non-parallel lines, (d) one S-curve, (e) two parallel S-curves, or (f) two non-parallel S-curves. **Justify your answer.**
+It would be two parallel S-Curves as they both have low detection rates at higher distances and form the previous question the difference between the two dogs is not significant, so it would start high anthen drop low for both dogs as the distance gets higher.
+
+
+
+
+## Write a sentences as if for an *Executive Summary* estimating the effect of a 1 metre increase in distance on the dog’s detection ability.
+
+The effect of a 1 metre increase in distance on a dog's detection ability is a probability of between 64% and 200% that the dog will not detect the food.
+
+
+
+
+## What are the detection probabilities at 0, 5, 10, 15, and 20 metres? **Note:** Report point estimates only. You do not need to calculate confidence intervals.
+
+0 metres = 4.057 - 1
+5 metres = 2.029 - 1
+10 metres = -1.332e-15 - 0
+15 metres = -2.029 - 0
+20 metres = -4.057 - 0
+
+
+## At what distance did the dogs detect only half of the contraband items?
+
+Looking at the data the the distance in which the dogs detected only half of the contraband was at 4 metres.
+
+
+
+
