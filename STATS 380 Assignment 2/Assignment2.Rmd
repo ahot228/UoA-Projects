@@ -1,0 +1,761 @@
+---
+title: "Assignment 2 STATS 380"
+author: "Anish Hota"
+date: "2025-10-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this assignment we will be anaylzing a text file called "votes-notes.txt", which contains notes on what voting happened towards the budget in New Zealand from 1999 onwards.
+
+## Reading the file.
+
+```{r cache=TRUE}
+notes <- readLines("votes-notes.txt", warn = FALSE)
+head(notes)
+length(notes)
+```
+
+## Getting only the body of each note.
+
+```{r cache=TRUE}
+noteBody <- notes[seq(from = 2, to = length(notes), by = 3)]
+head(noteBody)
+length(noteBody)
+```
+
+## Subsetting even more to get only the notes with "was renamed" in it.
+
+```{r cache=TRUE}
+renamedNotes <- noteBody[grepl("was renamed", noteBody, fixed = TRUE)]
+head(renamedNotes)
+length(renamedNotes)
+```
+
+## Creating a function to get the year.
+
+```{r cache=TRUE}
+getYear <- function(note) {
+  parts <- strsplit(note, "Budget ", fixed = TRUE)[[1]]
+  year_str <- substring(parts[2], 1, 4)
+  as.numeric(year_str)
+}
+getYear(renamedNotes[1])
+getYear(renamedNotes[2])
+sapply(renamedNotes, getYear, USE.NAMES = FALSE)
+```
+
+## Creating tests in the case of errors.
+
+```{r cache=TRUE}
+tests <- list(
+  "",                          # empty string
+  "No Budget here 2010",       # missing "Budget " literal
+  "Budget 99",                 # too short after "Budget "
+  123,                         # non-character input
+  c("Budget 2010", "Budget 2011") # vector of length > 1 (function assumes single string)
+)
+test_results <- lapply(tests, function(x) {
+  result <- tryCatch(
+    getYear(x),
+    error = function(e) paste0("ERROR: ", conditionMessage(e)),
+    warning = function(w) paste0("WARNING: ", conditionMessage(w))
+  )
+  result
+})
+names(test_results) <- c("empty_string", "noBudget", "shortAfterBudget", "numeric_input", "vector_input")
+test_results
+```
+
+## Modifying the getYear() function to pass the tests or cause an error.
+
+```{r cache=TRUE}
+getYear <- function(note) {
+  if (!is.character(note)) stop("'note' must be a character value.")
+  if (length(note) != 1) stop("'note' must be a single character value.")
+  if (nchar(note) == 0) stop("'note' must be non-empty.")
+  if (!grepl("Budget ", note, fixed = TRUE)) {
+    stop("'note' does not contain the text 'Budget '. Can't get year.")
+  }
+  parts <- strsplit(note, "Budget ", fixed = TRUE)[[1]]
+  if (length(parts) < 2 || nchar(parts[2]) < 4) {
+    stop("Can't get a 4-digit year after 'Budget '.")
+  }
+  year_txt <- substring(parts[2], 1, 4)
+  if (!grepl("^[0-9]{4}$", year_txt)) stop("Text after 'Budget ' is not a 4-digit year.")
+  as.numeric(year_txt)
+}
+test_results_fixed <- lapply(tests, function(x) {
+  result <- tryCatch(
+    getYear(x),
+    error = function(e) paste0("ERROR: ", conditionMessage(e))
+  )
+  result
+})
+test_results_fixed
+sapply(renamedNotes, getYear, USE.NAMES = FALSE)
+```
+
+## Checking if the notes is viable given certain criteria.
+
+```{r cache=TRUE}
+isVote <- function(words) {
+  first_ch <- substring(words, 1, 1)
+  is_upper <- first_ch %in% LETTERS
+  starts_dash <- substring(words, 1, 1) == "-"
+  starts_paren <- substring(words, 1, 1) == "("
+  is_and <- words == "and"
+  as.logical(is_upper | starts_dash | starts_paren | is_and)
+}
+isVote("A")
+isVote("a")
+isVote(c("-a", "(a)", "and"))
+words <- strsplit(renamedNotes[1], " ")[[1]]
+words
+isVote(words)
+```
+
+## Adding more criteria to the function.
+
+```{r cache=TRUE}
+isVote <- function(words) {
+  if (!is.character(words)) stop("'words' must be a character vector")
+  if (length(words) < 1) stop("'words' must contain at least 1 value")
+  if (any(nchar(words) == 0)) stop("All values in 'words' must contain at least 1 character")
+  first_ch <- substring(words, 1, 1)
+  is_upper <- first_ch %in% LETTERS
+  starts_dash <- substring(words, 1, 1) == "-"
+  starts_paren <- substring(words, 1, 1) == "("
+  is_and <- words == "and"
+  as.logical(is_upper | starts_dash | starts_paren | is_and)
+}
+isVote("ok")
+# Other examples gives the correct error message
+```
+
+## Splitting the notes into two pieces by using the "was renamed to"
+
+```{r cache=TRUE}
+extractToVote <- function(text_piece) {
+  words <- strsplit(text_piece, " ")[[1]]
+  words <- gsub("[\\.,]$", "", words)
+  flags <- isVote(words)
+  if (!any(flags)) return(NA_character_)
+  run_len <- rle(flags)$lengths
+  run_vals <- rle(flags)$values
+  if (!run_vals[1]) {
+    stop("No Vote-like words at start of the 'to' piece.")
+  }
+  n_votes <- run_len[1]
+  vote_words <- words[seq_len(n_votes)]
+  if (length(vote_words) >= 1 && vote_words[1] == "Vote") vote_words <- vote_words[-1]
+  paste(vote_words, collapse = " ")
+}
+pieces1 <- strsplit(renamedNotes[1], " was renamed to ")[[1]]
+pieces1
+toVote1 <- extractToVote(pieces1[2])
+toVote1
+```
+
+## Getting the first part of the renamedNotes vector.
+
+```{r cache=TRUE}
+extractFromVote <- function(text_piece) {
+  words <- strsplit(text_piece, " ")[[1]]
+  words <- gsub("[\\.,]$", "", words)
+  rwords <- rev(words)
+  flags <- isVote(rwords)
+  run_r <- rle(flags)
+  n_votes <- run_r$lengths[1]
+  vote_words_rev <- rwords[seq_len(n_votes)]
+  vote_words <- rev(vote_words_rev)
+  if (length(vote_words) >= 1 && vote_words[1] == "Vote") vote_words <- vote_words[-1]
+  paste(vote_words, collapse = " ")
+}
+
+fromVote1 <- extractFromVote(pieces1[1])
+fromVote1
+```
+
+## Creating a function to get either the old vote or the new vote name.
+
+```{r cache=TRUE}
+getVote <- function(text, forwards = TRUE) {
+  if (forwards) {
+    extractToVote(text)
+  } else {
+    extractFromVote(text)
+  }
+}
+getVote(pieces1[2])
+getVote(pieces1[1], forwards = FALSE)
+
+pieces2 <- strsplit(renamedNotes[2], " was renamed to ", fixed = TRUE)[[1]]
+getVote(pieces2[2])
+getVote(pieces2[1], forwards = FALSE)
+```
+
+## Rewriting the getVote() function to something that doesn't use an explicit loop.
+
+```{r cache=TRUE}
+getVoteVec <- function(text, forwards = TRUE) {
+  words <- strsplit(text, " ")[[1]]
+  words <- gsub("[\\.,]$", "", words)
+  if (forwards) {
+    flags <- isVote(words)
+    r <- rle(flags)
+    n <- r$lengths[1]
+    vote_words <- words[seq_len(n)]
+    if (length(vote_words) >= 1 && vote_words[1] == "Vote") vote_words <- vote_words[-1]
+    paste(vote_words, collapse = " ")
+  } else {
+    rwords <- rev(words)
+    flags <- isVote(rwords)
+    r <- rle(flags)
+    n <- r$lengths[1]
+    vote_words_rev <- rwords[seq_len(n)]
+    vote_words <- rev(vote_words_rev)
+    if (length(vote_words) >= 1 && vote_words[1] == "Vote") vote_words <- vote_words[-1]
+    paste(vote_words, collapse = " ")
+  }
+}
+
+identical(getVote(pieces1[2]), getVoteVec(pieces1[2]))
+identical(getVote(pieces1[1], forwards = FALSE), getVoteVec(pieces1[1], forwards = FALSE))
+```
+
+## Writing a function that takes in a note and outputs a character vector of the year, from and to each vote.
+
+```{r cache=TRUE}
+getChange <- function(note) {
+  pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+  yr <- getYear(note)
+  from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+  to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+  structure(c(year = as.character(yr), from = from, to = to),
+            names = c("year", "from", "to"))
+}
+
+getChange(renamedNotes[1])
+getChange(renamedNotes[2])
+```
+
+## Debugging an issue with the getChange() function with the renamedNotes vector.
+
+for (i in renamedNotes) 
++     getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> pieces
+[1] "From the Estimates of Appropriations 1999/00 in Budget 1999, Vote Accident Rehabilitation and Compensation Insurance"
+[2] "Vote Accident Insurance."                                                                                            
+Browse[1]> yr
+[1] 1999
+Browse[1]> from
+[1] "Accident Rehabilitation and Compensation Insurance"
+Browse[1]> to
+[1] "Accident Insurance"
+Browse[1]> c
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> i
+[1] "From the Estimates of Appropriations 2003/04 in Budget 2003, Vote Accident Insurance was renamed to Vote ACC."
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> yr
+[1] 2003
+Browse[1]> from
+[1] "Accident Insurance"
+Browse[1]> to
+[1] "ACC"
+Browse[1]> c
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> yr
+[1] 2000
+Browse[1]> from
+[1] "Cultural Affairs"
+Browse[1]> to
+[1] "Culture and Heritage"
+Browse[1]> c
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> yr
+[1] 2000
+Browse[1]> from
+[1] "Culture and Heritage"
+Browse[1]> to
+[1] "Arts Culture and Heritage"
+Browse[1]> c
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> i
+[1] "From the Estimates of Appropriations 2003/04 in Budget 2003, Vote Energy - Energy Efficiency and Conservation was renamed to Vote Climate Change and Energy Efficiency."
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> yr
+[1] 2003
+Browse[1]> from
+[1] "Energy - Energy Efficiency and Conservation"
+Browse[1]> to
+[1] "Climate Change and Energy Efficiency"
+Browse[1]> n
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> yr
+[1] 2008
+Browse[1]> from
+[1] "Climate Change and Energy Efficiency"
+Browse[1]> to
+[1] "Climate Change"
+Browse[1]> n
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> yr
+[1] 2000
+Browse[1]> from
+[1] "Culture and Heritage (Internal Affairs)"
+Browse[1]> to
+[1] "National Archives"
+Browse[1]> n
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> yr
+[1] 2000
+Browse[1]> from
+[1] "National Library"
+Browse[1]> to
+[1] "Culture and Heritage (National Library)"
+Browse[1]> i
+[1] "From the Estimates of Appropriations 2000/01 in Budget 2000, Vote National Library was renamed to Vote Culture and Heritage (National Library)."
+Browse[1]> c
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> yr
+[1] 2001
+Browse[1]> from
+[1] "Culture and Heritage (National Library)"
+Browse[1]> to
+[1] "National Library"
+Browse[1]> n
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> yr
+[1] 2008
+Browse[1]> from
+[1] "Economic Industry and Regional Development"
+Browse[1]> to
+[1] "Economic Development"
+Browse[1]> n
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> yr
+[1] 2001
+Browse[1]> from
+[1] "Employment Policy"
+Browse[1]> to
+[1] "Employment"
+Browse[1]> n
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> i
+[1] "From the Estimates of Appropriations 2011/12 in Budget 2011, Vote Research, Science and Technology was renamed to Vote Science and Innovation."
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> yr
+[1] 2011
+Browse[1]> from
+[1] "Research Science and Technology"
+Browse[1]> to
+[1] "Science and Innovation"
+Browse[1]> c
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> yr
+[1] 2015
+Browse[1]> from
+[1] "Housing"
+Browse[1]> to
+[1] "Building and Housing"
+Browse[1]> n
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> yr
+[1] 2015
+Browse[1]> from
+[1] "Pacific Island Affairs"
+Browse[1]> to
+[1] "Pacific Peoples"
+Browse[1]> n
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+debug at #6: structure(c(year = as.character(yr), from = from, to = to), names = c("year", 
+    "from", "to"))
+Browse[1]> yr
+[1] 2015
+Browse[1]> from
+[1] "Women's Affairs"
+Browse[1]> to
+[1] "Women"
+Browse[1]> c
+exiting from: getChange(i)
+debugging in: getChange(i)
+debug at #1: {
+    pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+    yr <- getYear(note)
+    from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+    to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+    structure(c(year = as.character(yr), from = from, to = to), 
+        names = c("year", "from", "to"))
+}
+Browse[1]> n
+debug at #2: pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+Browse[1]> n
+debug at #3: yr <- getYear(note)
+Browse[1]> n
+debug at #4: from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+Browse[1]> n
+debug at #5: to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+Browse[1]> n
+Error in if (any(nchar(words) == 0)) stop("All values in 'words' must contain at least 1 character") : 
+  missing value where TRUE/FALSE needed
+
+**Value 16 in th renamedNotes just says "was renamed" instead of "was renamed to".**
+
+## Adjusting the getChange function to fix this issue.
+
+```{r cache=TRUE}
+getChange <- function(note) {
+  pieces <- strsplit(note, " was renamed to ", fixed = TRUE)[[1]]
+  if (length(pieces) == 1) {
+    pieces <- strsplit(note, " was renamed ", fixed = TRUE)[[1]]
+  }
+  yr <- getYear(note)
+  from <- tryCatch(getVote(pieces[1], forwards = FALSE))
+  to <- tryCatch(getVote(pieces[2], forwards = TRUE))
+  structure(c(year = as.character(yr), from = from, to = to),
+            names = c("year", "from", "to"))
+}
+changes <- lapply(renamedNotes, getChange)
+head(changes, 3)
+length(changes)
+```
+
+## Creating a data frame of all the year, from and to votes.
+
+```{r cache=TRUE}
+voteChanges <- do.call(rbind, lapply(changes, function(x) as.data.frame(as.list(x), stringsAsFactors = FALSE)))
+voteChanges$year <- as.numeric(as.character(voteChanges$year))
+rownames(voteChanges) <- NULL
+head(voteChanges)
+dim(voteChanges)
+sapply(voteChanges, class)
+```
+
+## Graphing these changes in votes for each note.
+
+```{r cache=TRUE}
+o <- order(voteChanges$year, decreasing=FALSE)
+voteChanges <- voteChanges[o, ]
+n <- nrow(voteChanges)
+
+# Set up empty plot with correct x/y limits
+plot(NULL, xlim = c(min(voteChanges$year) - 25, max(voteChanges$year) + 10),
+     ylim = c(n,1), yaxt = "n", xaxt = "n",
+     xlab = "", ylab = "", bty = "n")
+
+par(cex = 0.5)
+axis(1, at = seq(2000, 2025, by = 5))
+
+for (i in seq_len(n)) {
+  y <- n - i + 1
+  x <- voteChanges$year[i]
+  points(c(x - 0.4, x + 0.4), rep(y, 2), pch = 16)
+  lines(c(x - 0.4, x + 0.4), rep(y, 2))
+  text(x - 1, y, voteChanges$from[i], adj = 1)
+  text(x + 1, y, voteChanges$to[i], adj = 0)
+}
+```
+
+## Summary
+
+After filtering the notes I wanted to I was able to get the notes in which there was a rename in a vote. I was also able to figure out any inconsistencies in my filtered data set and adjust for it accordingly. In the end I was able to output a graph that showed all the renamed votes, from what they were to what they became and sorted them by the year they were changed.
