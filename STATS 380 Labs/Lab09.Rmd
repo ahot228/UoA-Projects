@@ -1,0 +1,237 @@
+---
+title: "Lab 9 STATS 380"
+author: "Anish Hota"
+date: "2025-10-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+```{r cache=TRUE}
+assertError <- function(expr) {
+  ok <- FALSE
+  tryCatch({
+    force(expr)
+    ok <<- FALSE
+  }, error = function(e) {
+    ok <<- TRUE
+  }, finally = {
+    if (!ok) stop("Expected an error but none occurred")
+  })
+}
+getAmounts <- function(lines) {
+    if (!is.character(lines) || length(lines) < 1)
+        stop("'lines' must be a character vector (length > 1)")
+    pieces <- strsplit(lines, "$", fixed=TRUE)
+    amountChar <- sapply(pieces, function(x) x[2])
+    amount <- as.numeric(gsub(",", "", amountChar))
+    amount
+}
+ACTpage2 <- readLines("ACT-Party-Annual-Return-2022-page-2.txt",
+                      warn=FALSE)
+amountLines <- grep("No", ACTpage2)
+getAmounts(ACTpage2[amountLines])
+getAmounts("$100")
+```
+
+## Q1
+
+```{r cache=TRUE}
+stopifnot(getAmounts("$100") == 100)
+```
+
+## Q2
+
+```{r cache=TRUE}
+stopifnot(getAmounts("Donation from Bob $1234") == 1234)
+
+stopifnot(all(getAmounts(c("$10", "$20")) == c(10,20)))
+
+res <- getAmounts("no money here")
+stopifnot(is.na(res))
+
+res2 <- getAmounts(c("$5", "none"))
+stopifnot(is.na(res2[2]) && res2[1] == 5)
+```
+
+## Q3
+
+```{r cache=TRUE}
+assertError(getAmounts(1))
+```
+
+## Q4
+
+```{r cache=TRUE}
+assertError(getAmounts(NULL))
+assertError(getAmounts(NA))
+assertError(getAmounts(character(0)))
+```
+
+## Q5
+
+```{r cache=TRUE}
+getAmounts_oneDollarOnly <- function(lines) {
+    if (!is.character(lines) || length(lines) < 1)
+        stop("'lines' must be a character vector (length > 1)")
+    pieces <- strsplit(lines, "$", fixed=TRUE)
+    numDollar <- sapply(pieces, length) - 1
+    if (!all(numDollar %in% 0:1))
+        stop("There must be exactly one dollar sign")
+    amountChar <- sapply(pieces, function(x) x[2])
+    amount <- as.numeric(gsub(",", "", amountChar))
+    amountNA <- is.na(amount)
+    amount
+}
+assertError(getAmounts_oneDollarOnly(c("$10 and $20")))
+stopifnot(getAmounts_oneDollarOnly("$100") == 100)
+stopifnot(getAmounts_oneDollarOnly("Donation from Bob $1234") == 1234)
+stopifnot(all(getAmounts_oneDollarOnly(c("$10", "$20")) == c(10,20)))
+stopifnot(is.na(getAmounts_oneDollarOnly("no money here")))
+res <- getAmounts_oneDollarOnly(c("$5","none"))
+stopifnot(res[1] == 5 && is.na(res[2]))
+assertError(getAmounts_oneDollarOnly(1))
+assertError(getAmounts_oneDollarOnly(NULL))
+assertError(getAmounts_oneDollarOnly(NA))
+assertError(getAmounts_oneDollarOnly(character(0)))
+```
+
+## Q6
+
+```{r cache=TRUE}
+getAmounts_numericAfterDollar <- function(lines) {
+  if (!is.character(lines) || length(lines) < 1)
+    stop("'lines' must be a character vector (length > 1)")
+  pieces <- strsplit(lines, "$", fixed=TRUE)
+  numDollar <- sapply(pieces, length) - 1
+  if (!all(numDollar %in% 0:1))
+    stop("There must be exactly one dollar sign")
+  amountChar <- sapply(pieces, function(x) x[2])
+  amount <- as.numeric(gsub(",", "", amountChar))
+  amountNA <- is.na(amount)
+  if (any(numDollar == 1 & amountNA))
+    stop("There must (only) be an amount after the dollar sign")
+  amount
+}
+assertError(getAmounts_numericAfterDollar("$onehundred"))
+assertError(getAmounts_numericAfterDollar("$100abc"))
+stopifnot(getAmounts_numericAfterDollar("$100") == 100)
+stopifnot(getAmounts_numericAfterDollar("Blah $2500") == 2500)
+stopifnot(all(getAmounts_numericAfterDollar(c("$10", "$20")) == c(10,20)))
+stopifnot(is.na(getAmounts_numericAfterDollar("no money here")))
+res <- getAmounts_numericAfterDollar(c("$5","none"))
+stopifnot(res[1] == 5 && is.na(res[2]))
+assertError(getAmounts_numericAfterDollar(1))
+assertError(getAmounts_numericAfterDollar(NULL))
+assertError(getAmounts_numericAfterDollar(NA))
+assertError(getAmounts_numericAfterDollar(character(0)))
+```
+
+## Q7
+
+```{r cache=TRUE}
+getAmountLines <- function(lines) {
+    amountLines <- grep("No", lines)
+    amounts <- getAmounts(lines[amountLines])
+    amountNA <- is.na(amounts)
+    if (any(amountNA)) {
+        amountLines[amountNA] <- amountLines[amountNA] - 1
+    }
+    amountLines
+}
+ACTpage2 <- readLines("ACT-Party-Annual-Return-2022-page-2.txt",
+                      warn=FALSE)
+lines <- getAmountLines(ACTpage2)
+ACTamountsPage2 <- getAmounts(ACTpage2[lines])
+ACTamountsPage2
+files_to_load <- c(
+  "ACT-Party-Annual-Return-2022-page-2.txt",
+  "ACT-Party-Annual-Return-2022-page-3.txt",
+  "ACT-Party-Annual-Return-2022-page-4.txt",
+  "Green-Party-Annual-Return-2022-page-2.txt",
+  "Green-Party-Annual-Return-2022-page-3.txt"
+)
+donations <- lapply(files_to_load, function(fname) {
+  lines <- readLines(fname, warn = FALSE)
+  alines <- getAmountLines(lines)
+  amounts <- getAmounts_numericAfterDollar(lines[alines])
+  as.numeric(amounts)
+})
+donations
+```
+
+## Q8
+
+```{r cache=TRUE}
+debug(getAmounts_numericAfterDollar)
+NZFirstPage2 <- readLines("NZ-First-Annual-Return-2022-page-2.txt",
+                          warn=FALSE)
+lines <- getAmountLines(NZFirstPage2)
+getAmounts_numericAfterDollar(NZFirstPage2[lines])
+undebug(getAmounts_numericAfterDollar)
+```
+
+## Q9
+
+```{r cache=TRUE}
+debug(getAmountLines)
+NZFirstPage2 <- readLines("NZ-First-Annual-Return-2022-page-2.txt",
+                          warn=FALSE)
+lines <- getAmountLines(NZFirstPage2)
+getAmounts_numericAfterDollar(NZFirstPage2[lines])
+undebug(getAmountLines)
+```
+
+## Q10
+
+```{r cache=TRUE}
+getAmounts <- function(lines) {
+    if (!is.character(lines) || length(lines) < 1)
+        stop("'lines' must be a character vector (length > 1)")
+    pieces <- strsplit(lines, "$", fixed=TRUE)
+    numDollar <- sapply(pieces, length) - 1
+    if (!all(numDollar %in% 0:1))
+        stop("There must be exactly one dollar sign")
+    amountChar <- sapply(pieces, function(x) x[2])
+    amount <- as.numeric(gsub(",", "", amountChar))
+    amountNA <- is.na(amount)
+    if (any(numDollar == 1 & amountNA))
+        stop("There must (only) be an amount after the dollar sign")
+    if (any(amountNA)) {
+        numbers <- grepl(" [0-9]+$", lines)
+        if (any(numbers))
+            amount[amountNA & numbers] <- 
+                gsub("[^0-9]+", "", lines[amountNA & numbers])
+    }
+    amount
+}
+lines <- getAmountLines(NZFirstPage2)
+getAmounts(NZFirstPage2[lines])
+stopifnot(is.na(getAmounts("some text no number")))
+stopifnot(getAmounts("$100") == 100)
+stopifnot(getAmounts("Blah $2,500") == 2500)
+stopifnot(getAmounts("$100") == 100)
+stopifnot(getAmounts("Donation from Bob $1234") == 1234)
+stopifnot(all(getAmounts(c("$10", "$20")) == c(10,20)))
+stopifnot(is.na(getAmounts("no money here")))
+res <- getAmounts(c("$5", "none"))
+stopifnot(res[1] == 5 && is.na(res[2]))
+assertError(getAmounts(1))
+assertError(getAmounts(NULL))
+assertError(getAmounts(NA))
+assertError(getAmounts(character(0)))
+assertError(getAmounts("$onehundred"))
+assertError(getAmounts("$100abc"))
+assertError(getAmounts(c("$10 and $20")))
+donations <- lapply(files_to_load, function(fname) {
+  lines <- readLines(fname, warn = FALSE)
+  alines <- getAmountLines(lines)
+  amounts <- getAmounts(lines[alines])
+  as.numeric(amounts)
+})
+donations
+```

@@ -1,0 +1,115 @@
+---
+title: "Lab 10 STATS 380"
+author: "Anish Hota"
+date: "2025-10-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+```{r cache=TRUE}
+amounts <- readRDS("donation-amounts.rds")
+head(amounts, 4)
+names <- readRDS("donation-names.rds")
+head(names, 4)
+```
+
+## Q1
+
+```{r cache=TRUE}
+length(amounts) == length(names)
+all(mapply(length, amounts) == mapply(length, names))
+```
+
+## Q2
+
+```{r cache=TRUE}
+tidyAmounts <- lapply(amounts, function(x) x[!is.na(x)])
+tidyNames <- mapply(function(nm, amt) nm[!is.na(amt)], names, amounts, SIMPLIFY = FALSE)
+mode(tidyAmounts)
+length(tidyAmounts)
+tidyAmounts[[10]]
+tidyNames[[10]]
+```
+
+## Q3
+
+```{r cache=TRUE}
+fill_empty_names <- function(namelist) {
+  for (i in seq_along(namelist)) {
+    if (namelist[i] == "" && i > 1) {
+      namelist[i] <- namelist[i - 1]
+    }
+  }
+  return(namelist)
+}
+
+fullNames <- lapply(tidyNames, fill_empty_names)
+mode(fullNames)
+length(fullNames)
+fullNames[[1]]
+fullNames[[3]]
+```
+
+## Q4
+
+```{r cache=TRUE}
+party_names <- names(tidyAmounts)
+
+donations <- do.call(rbind, lapply(seq_along(tidyAmounts), function(i) {
+  data.frame(
+    party = party_names[i],
+    amount = tidyAmounts[[i]],
+    donor = fullNames[[i]],
+    stringsAsFactors = FALSE
+  )
+}))
+donations$party <- factor(donations$party)
+dim(donations)
+head(donations)
+tail(donations)
+sapply(donations, class)
+```
+
+## Q5
+
+```{r cache=TRUE}
+donations$party <- factor(donations$party,
+                          levels = c("ACT", "Green", "Labour", "National", "NZ-First"))
+
+# Compute y-limits (a little padding above max)
+
+# Set plotting margins similar to default (adjust if needed)
+op <- par(las=1)
+
+plot(donations$party, donations$amount,xlab="",ylab="",xaxt='n')
+
+stripchart(amount ~ party, data = donations,
+           vertical = TRUE,
+           method = "jitter",
+           pch = 1,
+           add = TRUE,
+           cex = 1,
+           at = 1:length(levels(donations$party)),
+           jitter = 0.15)
+
+abline(h = median(as.numeric(donations$amount)), lty = 2)
+
+axis(1, at = 1:length(levels(donations$party)), labels = levels(donations$party))
+```
+
+## Q6
+
+```{r cache=TRUE}
+donations$donor <- gsub("(?i)phillip mills family trust", "Phillip Mills", donations$donor, perl = TRUE)
+unique_donors <- unique(donations[, c("donor", "party")])
+multi_party_donors <- unique_donors$donor[duplicated(unique_donors$donor)]
+for (d in unique(multi_party_donors)) {
+  parties <- unique(unique_donors$party[unique_donors$donor == d])
+  cat(d, "donated to", paste(parties, collapse = " AND to "), ".\n")
+}
+```

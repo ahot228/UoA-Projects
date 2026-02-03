@@ -1,0 +1,113 @@
+---
+title: "Assignment 2 STATS 369"
+author: "Anish Hota"
+date: "2025-08-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
+library(glmnet)
+```
+
+## Setting up the Total Government Votes
+
+```{r cache=TRUE}
+nameless <- read_xlsx("electorate_profiles_2020-data_file.xlsx", 
+                      sheet="Percent", skip=5, col_names=FALSE)
+
+namestuff <- read_xlsx("electorate_profiles_2020-data_file.xlsx", 
+                       sheet="Percent", range="B4:UH5", col_names=FALSE)
+
+headers <- namestuff |> 
+  t() |> as.data.frame() |> 
+  unite("name", V1:V2, sep="_") |> 
+  pull(name)
+
+colnames(nameless) <- c("Electorate", headers)
+
+# Read in 2023 votes
+votes <- read_csv("votes2023.csv")
+
+gov_votes <- votes |>
+  mutate(GovTotal = NATIONAL.PARTY + ACT.NEW.ZEALAND + NEW.ZEALAND.FIRST.PARTY) |>
+  select(Electorate, GovTotal)
+
+final_table <- nameless |> left_join(gov_votes, by="Electorate")
+
+final_table <- nameless %>%
+  left_join(gov_votes, by="Electorate")
+```
+
+## Inspecting Data Correlation
+
+```{r cache=TRUE}
+summary(final_table$GovTotal)
+num_data <- final_table %>% 
+  select(where(is.numeric), -Electorate)
+
+num_data_clean <- num_data %>%
+  select(where(~ sd(., na.rm=TRUE) > 0))
+
+cor_matrix <- cor(num_data_clean, use = "pairwise.complete.obs")
+```
+
+Because these predictors are highly correlated we should use regularised regression to avoid any overfitting.
+
+## Model Fitting
+
+```{r cache=TRUE}
+X <- final_table |>
+  select(where(is.numeric), -GovTotal) |>
+  mutate(across(everything(), ~ifelse(is.na(.), mean(., na.rm=TRUE), .))) |>
+  as.matrix()
+y <- final_table$GovTotal
+valid_rows <- !is.na(y)
+y <- y[valid_rows]
+X <- X[valid_rows, ]
+# Train/test split
+set.seed(123)
+n <- nrow(X)
+train <- sample(1:n, size=floor(0.8*n))
+test <- setdiff(1:n, train)
+
+# Lasso and Ridge CV
+cv_lasso <- cv.glmnet(X[train,], y[train], alpha=1)
+cv_ridge <- cv.glmnet(X[train,], y[train], alpha=0)
+
+# Fit best models
+best_lasso <- glmnet(X[train,], y[train], alpha=1, lambda=cv_lasso$lambda.min)
+best_ridge <- glmnet(X[train,], y[train], alpha=0, lambda=cv_ridge$lambda.min)
+
+# Predictions
+pred_lasso <- predict(best_lasso, X[test,])
+pred_ridge <- predict(best_ridge, X[test,])
+
+# RMSE
+rmse_lasso <- sqrt(mean((y[test] - pred_lasso)^2))
+rmse_ridge <- sqrt(mean((y[test] - pred_ridge)^2))
+
+rmse_lasso
+rmse_ridge
+```
+## Plot
+```{r cache=TRUE}
+plot(y[test], pred_lasso, 
+     xlab="Observed Votes", ylab="Predicted Votes", 
+     main="Observed vs Predicted (Lasso)")
+abline(0,1,col="red")
+```
+
+The Lasso Regression model has a competitive prediction error, so this is our final model.
+
+## Conclusion
+
+The final Lasso regression model achieves an RMSE of approximately 2260 votes, meaning predictions are typically within that margin of actual totals.
+
+## Citations and Acknowlegments
+
+I have used Chat GPT to help with the X and Y values as well as the correlation mattrix.
+
+

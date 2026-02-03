@@ -1,0 +1,185 @@
+---
+title: "Assignment 4 STATS 369"
+author: "Anish Hota"
+date: "2025-10-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+```{r cache=TRUE}
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(caret)
+library(randomForest)
+library(xgboost)
+student_id <- 427632295
+set.seed(student_id)
+```
+
+## Task 1
+
+# Loading Data
+
+```{r cache=TRUE}
+data_raw <- read_rds('nz_birds_tui_bell.rds')
+glimpse(data_raw)
+```
+
+# Variables With no Variation
+
+```{r cache=TRUE}
+zero_var_cols <- data_raw |>
+select(where(~ n_distinct(., na.rm = TRUE) <= 1)) |>
+names()
+zero_var_cols
+```
+
+# Proportion of Value Missing For Each Variable
+
+```{r cache=TRUE}
+missing_prop <- data_raw |>
+summarise(across(everything(), ~ mean(is.na(.)))) |>
+pivot_longer(everything(), names_to = 'variable', values_to = 'prop_missing') |>
+arrange(desc(prop_missing))
+missing_prop
+```
+
+# Other Quality Issues
+
+
+There seems to be some variables with the same or very similar values to one another, which means that some of these columns are just not necessary for further investigation.
+
+# Cleaning the Data
+
+```{r cache=TRUE}
+birds <- data_raw
+
+# Remove zero-variance variables
+if(length(zero_var_cols) > 0) birds <- birds |>
+  select(-all_of(zero_var_cols))
+
+# Exclude irrelevant / duplicate variables
+birds <- birds |>
+  select(-all_of(c("genus","scientificName","verbatimScientificName", "taxonKey", "collectionCode", "issue","lastInterpreted","speciesKey")))
+
+# Restricting with NZ boundaries
+birds <- birds |>
+filter(
+between(decimalLatitude, -50, -33) &
+between(decimalLongitude, 166, 180)
+)
+
+# Imputing missing values
+birds[is.na(birds)] <- 0
+
+# Creating new response variable
+birds <- birds |>
+mutate(is_bellbell = species == 'Anthornis melanura')
+birds
+```
+
+## Task 2
+
+# Regions of NZ Showing the Greatest Prescence of Bellbirds
+
+```{r cache=TRUE}
+region_tab <- birds |>
+group_by(stateProvince, is_bellbell) |>
+summarise(n_obs = n(), .groups = 'drop') |>
+group_by(stateProvince) |>
+mutate(prop_bellbird = n_obs / sum(n_obs)) |>
+filter(is_bellbell == TRUE) |>
+arrange(desc(n_obs))
+region_tab
+```
+
+Regions such as Canterbury, Southland and Otago seem to have a lot of Bellbirds, where areas like Gisborne, Taranaki and Northland seem to not have as much. In general it seems that Bellbirds are more towards the south of NZ rather than the North.
+
+# Number of Birds Recorded per Encounter Between Species
+
+```{r cache=TRUE}
+ggplot(birds, aes(x = as.factor(is_bellbell), y = individualCount)) +
+geom_boxplot(outlier.shape = NA) +
+geom_jitter(width = 0.2, alpha = 0.3, size = 0.8) +
+labs(x = 'Tui = FALSE, Bellbird = TRUE', y = 'Number of birds per encounter')
+```
+No there is no significant difference of individual count between the two species.
+
+# Trends by Month Between Species
+
+```{r cache=TRUE}
+monthly_trends <- birds |>
+  mutate(date = as.Date(paste(year, month, "01", sep = "-"))) |>
+  group_by(is_bellbell, year, month) |>
+  summarise(total_birds = sum(individualCount, na.rm = TRUE))
+ggplot(monthly_trends, aes(x = as.Date(paste(year, month, "01", sep = "-")), 
+                           y = total_birds, 
+                           color = is_bellbell)) +
+  geom_line() +
+  labs(title = "Monthly Trends in Total Bird Sightings",
+       x = "Date", 
+       y = "Total Birds Observed",
+       color = "Species") +
+  theme_minimal()
+```
+
+It Seems that Tuis are not observed as much in earlier months of the year while bellbirds are similar, but not as much of a difference. This is is probably due to winter months being cold so they are not out and about as much.
+
+## Task 3
+
+# Train/Test + Random Forest Model
+
+```{r cache=TRUE}
+# Train/Test Split Data
+birds$is_bellbell <- as.factor(birds$is_bellbell)
+set.seed(student_id)
+idx <- createDataPartition(birds$is_bellbell, p = 0.7, list = FALSE)
+train <- birds[idx, ]
+test <- birds[-idx, ]
+
+# Random Forest Model
+exclude_vars <- c('occurenceID','gbifID','species','is_bellbell','event_date')
+exclude_vars <- intersect(exclude_vars, names(train))
+predictors <- setdiff(names(train), exclude_vars)
+rf_formula <- as.formula(paste('is_bellbell ~', paste(predictors, collapse = ' + ')))
+set.seed(student_id)
+rf_model <- randomForest(rf_formula, data = train, importance = TRUE, na.action = na.omit)
+rf_model
+rf_imp <- importance(rf_model)
+rf_imp_df <- as.data.frame(rf_imp) |>
+  rownames_to_column('variable') |>
+  arrange(desc(MeanDecreaseGini))
+rf_imp_df
+rf_pred <- predict(rf_model, newdata = test)
+cm_rf <- confusionMatrix(rf_pred, test$is_bellbell)
+```
+
+# XGB Model
+
+Unable to do xgb model.
+
+## Task 4
+
+# Important Variables
+
+```{r cache=TRUE}
+ggplot(birds, aes(x = decimalLatitude, y = decimalLongitude, color = is_bellbell))+
+  geom_line()
+```
+
+The longitude and latitude variables were deemed the most important so I compared the two together, with the species as the colour. The third most important variable was the occurence_id, which I couldn't create anything out of because this variable is just a unique id for every single observation.
+
+# Discussion
+
+There will be some observer bias, such as time of day and location they are in as well. The bellbirds might be more prominent in these observers location than normal and also Tuis might also be more aggressive towards feeders and avoid them altogether, which lessens the amount of time they get reported. This sampling bias reflects observer behaviour rather than the ecology of the different species it can give a whole new persepctive to how these species relate to one another.
+
+
+## Citations and Acknowldgements
+
+I tried many times to do the xgboost model but was unable to figure it out. I have used ChatGPT to help with solving the xgboost model as well as using it to help with the random forest model.

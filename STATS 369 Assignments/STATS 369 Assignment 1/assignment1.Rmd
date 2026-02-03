@@ -1,0 +1,109 @@
+---
+title: "Assignment 1"
+author: "Anish Hota"
+date: "2025-08-08"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+
+```{r,include=FALSE}
+seismic_29_files <- list.files("~/Desktop/STATS 369/Assignment 1/seismic/29", pattern = "*.csv", full.names = TRUE)
+read_hour_file <- function(file) {
+  # read file (two columns: unnamed + x)
+  df <- read_csv(file, col_names = c("row_id", "x"))
+  
+  # extract hour from filename (e.g., "0.sac.csv" -> 0)
+  hour_val <- as.numeric(str_extract(basename(file), "^\\d+"))
+  
+  df |>
+    mutate(
+      hour = hour_val,
+      minute_in_hour = (row_number() - 1) %/% 1080,  # chunk every 1080 rows
+      datetime = ymd_hms("2025-01-29 00:00:00", tz = "UTC") +
+                 hours(hour_val) +
+                 minutes(minute_in_hour)
+    )
+}
+seismic_29 <- seismic_29_files |>
+  map_df(read_hour_file)
+seismic_28_files <- list.files("~/Desktop/STATS 369/Assignment 1/seismic/28", pattern = "*.csv", full.names = TRUE)
+seismic_28 <- seismic_28_files |>
+  map_df(read_hour_file)
+```
+
+## Question 1
+
+```{r,fig.height=4.2,fig.width=6}
+data_minute_29 <- seismic_29 |>
+  group_by(datetime) |>
+  summarise(sd_seismic = sd(x), .groups = "drop")
+data_minute_29
+# Plot
+ggplot(data_minute_29, aes(x = datetime, y = sd_seismic)) +
+  geom_line() +
+  labs(
+    title = "Seismic Noise - Per Minute SD 29 Jan",
+    x = "Time (UTC)",
+    y = "Standard Deviation"
+  )
+```
+## Question 2
+
+```{r,fig.height=4.2,fig.width=6}
+data_minute_29 <- data_minute_29 %>%
+  mutate(
+    nz_time = with_tz(datetime, tzone = "Pacific/Auckland"),
+    hour_nz = hour(nz_time),
+    daytime = if_else(hour_nz >= 8 & hour_nz < 20, 1, 0),
+    peak_commute = if_else(hour_nz %in% 7:8 | hour_nz %in% 16:17, 1, 0)
+  )
+regression_model_29 <- lm(sd_seismic ~ daytime + peak_commute, data = data_minute_29)
+summary(regression_model_29)
+```
+## Question 3
+
+```{r,fig.height=4.2,fig.width=6}
+data_hour_29 <- seismic_29 %>%
+  group_by(hour) %>%
+  summarise(sd_seismic = sd(x), .groups = "drop") %>%
+  mutate(
+    datetime = ymd_hms("2025-01-29 00:00:00", tz = "UTC") + hours(hour),
+    nz_time = with_tz(datetime, tzone = "Pacific/Auckland"),
+    hour_nz = hour(nz_time),
+    daytime = if_else(hour_nz >= 8 & hour_nz < 20, 1, 0),
+    peak_commute = if_else(hour_nz %in% 7:8 | hour_nz %in% 16:17, 1, 0)
+  )
+
+model_hour_29 <- lm(sd_seismic ~ daytime + peak_commute, data = data_hour_29)
+summary(model_hour_29)
+```
+The p-value is larger in the per hour than the minute but still signifcant enough to suggest that there is change for the daytime variable. The peak_commute variable however seems to have strong evdience per minute but very weak evidence per hour.
+
+## Question 4
+
+```{r,fig.height=4.2,fig.width=6}
+data_minute_28 <- seismic_28 |>
+  group_by(datetime) |>
+  summarise(sd_seismic = sd(x), .groups = "drop")
+data_minute_28 <- data_minute_28 %>%
+  mutate(
+    nz_time = with_tz(datetime, tzone = "Pacific/Auckland"),
+    hour_nz = hour(nz_time),
+    daytime = if_else(hour_nz >= 8 & hour_nz < 20, 1, 0),
+    peak_commute = if_else(hour_nz %in% 7:8 | hour_nz %in% 16:17, 1, 0)
+  )
+regression_model_28 <- lm(sd_seismic ~ daytime + peak_commute, data = data_minute_28)
+summary(regression_model_28)
+```
+## Citations and Acknowledgments
+
+I have used ChatGPT to help with the read_hour_file function as well as the daytime and peak_commute variables, everything else was done by myself.
+

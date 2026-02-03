@@ -1,0 +1,201 @@
+---
+title: "Lab 7 STATS 380"
+author: "Anish Hota"
+date: "2025-09-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+```{r cache=TRUE}
+extractAmount <- function(lines) {
+    pieces <- strsplit(lines, "$", fixed=TRUE)
+    amountChar <- sapply(pieces, function(x) x[2])
+    amount <- as.numeric(gsub(",", "", amountChar))
+    amount
+}
+getPage <- function(filebase, page) {
+    filename <- paste0(filebase, "-page-", page, ".txt")
+    page <- readLines(filename)
+    NoLines <- grep("No", page)
+    amount <- extractAmount(page[NoLines])
+    amountNA <- is.na(amount)
+    if (any(amountNA)) {
+        amountLines <- NoLines[amountNA] - 1
+        amount[amountNA] <- extractAmount(page[amountLines])   
+    }
+    amount
+}
+numbers <- seq(0, 100000, 20000)
+```
+
+## Q1 and Q2
+
+```{r cache=TRUE}
+
+extractQ1 <- function(x = TRUE, y = FALSE) {
+  # Get all donation amounts from pages 2–4 of the ACT Party Annual Return 2022
+  donations <- unlist(lapply(2:4, function(page) getPage("ACT-Party-Annual-Return-2022", page)))
+  # If x = TRUE, draw a stripchart of donations
+  if (x) {
+    stripchart(donations,
+               method = "jitter",
+               jitter = 0.5,
+               axes = FALSE)
+    axis(1,
+         at = numbers,
+         label = format(numbers, scientific = FALSE, big.mark = ","))
+    box()
+    title("ACT Party Donations 2022")
+  }
+  
+  # If y = TRUE, return the donation amounts, otherwise return nothing
+  if (y) {
+    donations
+  } else {
+    invisible(NULL)
+  }
+}
+extractQ1()
+```
+
+## Q3
+
+```{r cache=TRUE}
+extractQ3 <- function(x = TRUE, y = FALSE) {
+  if (!is.logical(x) || length(x) != 1) {
+    stop("'x' must be a single logical value")
+  }
+  if (!is.logical(y) || length(y) != 1) {
+    stop("'y' must be a single logical value")
+  }
+  
+  donations <- unlist(lapply(2:4, function(page) getPage("ACT-Party-Annual-Return-2022", page)))
+  
+  if (x) {
+    stripchart(donations,
+               method = "jitter",
+               jitter = 0.5,
+               axes = FALSE)
+    axis(1,
+         at = numbers,
+         label = format(numbers, scientific = FALSE, big.mark = ","))
+    box()
+    title("ACT Party Donations 2022")
+  }
+  
+  if (y) {
+    donations
+  } else {
+    invisible(NULL)
+  }
+}
+```
+
+## Q4
+
+"ACT-Party-Annual-Return-2022": the file base (could become an argument for generalisation).
+
+2:4: page numbers to extract (also could become an argument).
+
+numbers: used for the axis ticks (global constant).
+
+0.5 in jitter = 0.5: jitter size (could become an argument).
+
+"ACT Party Donations 2022": the plot title (could become an argument).
+
+## Q5
+
+```{r cache=TRUE}
+extractQ5 <- function(plot = TRUE, returnData = FALSE) {
+  if (!is.logical(plot) || length(plot) != 1) {
+    stop("'plot' must be a single logical value")
+  }
+  if (!is.logical(returnData) || length(returnData) != 1) {
+    stop("'returnData' must be a single logical value")
+  }
+  
+  # Read ACT donation amounts (pages 2–4)
+  actDonations <- unlist(lapply(2:4, function(page) getPage("ACT-Party-Annual-Return-2022", page)))
+  
+  if (plot) {
+    stripchart(actDonations,
+               method = "jitter",
+               jitter = 0.5,
+               axes = FALSE)
+    axis(1,
+         at = numbers,
+         label = format(numbers, scientific = FALSE, big.mark = ","))
+    box()
+    title("ACT Party Donations 2022")
+  }
+  
+  if (returnData) {
+    actDonations
+  } else {
+    invisible(NULL)
+  }
+}
+```
+
+## Q6
+
+Local symbols: plot, returnData, actDonations.
+
+Global symbols: numbers, getPage(), stripchart(), axis(), box(), title().
+
+getPage() is in the global environment.
+
+stripchart, axis, box, title are from graphics package.
+
+## Q7
+
+This is not fully modular
+```{r cache=TRUE}
+getACT <- function() {
+  unlist(lapply(2:4, function(page) getPage("ACT-Party-Annual-Return-2022", page)))
+}
+
+plotACT <- function() {
+  actDonations <- getACT()
+  stripchart(actDonations,
+             method = "jitter",
+             jitter = 0.5,
+             axes = FALSE)
+  axis(1,
+       at = numbers,
+       label = format(numbers, scientific = FALSE, big.mark = ","))
+  box()
+  title("ACT Party Donations 2022")
+}
+getACT()
+plotACT()
+```
+
+## Q8
+
+```{r cache=TRUE}
+getAmounts <- function(party, pages) {
+  unlist(lapply(pages, function(page) getPage(party, page)))
+}
+
+plotAmounts <- function(amounts, titleText) {
+  stripchart(amounts,
+             method = "jitter",
+             jitter = 0.5,
+             axes = FALSE)
+  axis(1,
+       at = numbers,
+       label = format(numbers, scientific = FALSE, big.mark = ","))
+  box()
+  title(titleText)
+}
+actData <- getAmounts("ACT-Party-Annual-Return-2022", 2:4)
+plotAmounts(actData, "ACT Party Donations 2022")
+greenData <- getAmounts("Green-Party-Annual-Return-2022", 2:3)
+plotAmounts(greenData, "Green Party Donations 2022")
+```

@@ -1,0 +1,131 @@
+---
+title: "Lab 08 STATS 380"
+author: "Anish Hota"
+date: "2025-10-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+```{r cache = TRUE}
+getAmounts <- function(lines) {
+  pieces <- strsplit(lines, "$", fixed = TRUE)
+  amountChar <- sapply(pieces, function(x) x[2])
+  amount <- as.numeric(gsub(",", "", amountChar))
+  amount
+}
+
+getAmountLines <- function(lines) {
+  amountLines <- grep("No", lines)
+  amounts <- getAmounts(lines[amountLines])
+  amountNA <- is.na(amounts)
+  if (any(amountNA)) {
+    amountLines[amountNA] <- amountLines[amountNA] - 1
+  }
+  amountLines
+}
+
+containsName <- function(line) {
+  grepl("[[:alpha:]] [[:alpha:]][[:alpha:]]+)?,", line)
+}
+
+getNames <- function(lines) {
+  gsub("^[[:digit:]]*[[:space:]]*|,.+", "", lines)
+}
+```
+
+## Q2
+
+```{r cache = TRUE}
+ACTpage2 <- readLines("ACT-Party-Annual-Return-2022-page-2.txt")
+head(ACTpage2)
+```
+
+## Q3
+
+```{r cache = TRUE}
+amountLines <- getAmountLines(ACTpage2)
+amountLines
+head(ACTpage2[amountLines])
+```
+
+## Q4
+
+```{r cache = TRUE}
+start <- amountLines[1]
+nextAmount <- amountLines[2]
+nameLine2 <- NA
+for (i in (start + 1):(nextAmount - 1)) {
+  if (containsName(ACTpage2[i])) {
+    nameLine2 <- i
+    break
+  }
+}
+nameLine2
+ACTpage2[nameLine2]
+```
+
+## Q5
+
+```{r cache = TRUE}
+yesNoLine <- grep("YES or NO", ACTpage2)[1]
+nextAmount <- amountLines[1]
+nameLine1 <- NA
+for (i in (yesNoLine + 1):(nextAmount - 1)) {
+  if (containsName(ACTpage2[i])) {
+    nameLine1 <- i
+    break
+  }
+}
+nameLine1
+ACTpage2[nameLine1]
+```
+
+## Q6
+
+```{r cache = TRUE}
+getNameLines <- function(lines, amountLines) {
+  nameLines <- rep(NA, length(amountLines))
+  startLines <- c(grep("YES or NO", lines)[1], amountLines[-length(amountLines)])
+  
+  for (j in seq_along(amountLines)) {
+    start <- startLines[j]
+    end <- amountLines[j]
+    for (i in (start + 1):(end - 1)) {
+      if (containsName(lines[i])) {
+        nameLines[j] <- i
+        break
+      }
+    }
+  }
+  nameLines
+}
+
+nameLines <- getNameLines(ACTpage2, amountLines)
+nameLines
+head(ACTpage2[nameLines])
+```
+
+## Q7
+
+```{r cache = TRUE}
+ACTpages <- list(
+  readLines("ACT-Party-Annual-Return-2022-page-2.txt"),
+  readLines("ACT-Party-Annual-Return-2022-page-3.txt"),
+  readLines("ACT-Party-Annual-Return-2022-page-4.txt")
+)
+
+# Find amount and name lines for each page
+ACTamountLines <- lapply(ACTpages, getAmountLines)
+ACTnameLines <- mapply(getNameLines, ACTpages, ACTamountLines, SIMPLIFY = FALSE)
+
+ACTamountLines
+ACTnameLines
+```
+
+
+
