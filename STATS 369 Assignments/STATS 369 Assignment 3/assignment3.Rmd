@@ -1,0 +1,136 @@
+---
+title: "Assignment 3 STATS 369"
+author: "Anish Hota"
+date: "2025-10-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Task 1A
+
+```{r cache=TRUE}
+seed <- 427632295
+set.seed(seed)
+library(tidyverse)
+library(naniar)
+library(janitor)
+library(rpart)
+library(rpart.plot)
+library(missRanger)
+library(caret)
+crx <- read.table("crx.data", sep = ",", header = FALSE, stringsAsFactors = FALSE, na.strings = c("?",""))
+colnames(crx) <- sprintf("A%02d", 1:ncol(crx))
+glimpse(crx)
+table(crx$A16, useNA = "ifany")
+```
+```{r cache=TRUE}
+# Which variable has the highest and lowest missingness?
+auto_convert <- function(df) {
+  df2 <- df
+  for (nm in names(df2)) {
+    suppressWarnings({
+      vnum <- as.numeric(df2[[nm]])
+    })
+    if (sum(!is.na(vnum)) / length(vnum) > 0.5) {
+      df2[[nm]] <- vnum
+    } else {
+      df2[[nm]] <- as.factor(df2[[nm]])
+    }
+  }
+  df2
+}
+crx_conv <- auto_convert(crx)
+
+missing_pct <- sapply(crx_conv[,1:15], function(x) mean(is.na(x))*100)
+missing_table <- tibble(variable = names(missing_pct), pct_missing = missing_pct) |>
+  arrange(desc(pct_missing))
+missing_table
+
+# Which predictors are co-missing?
+vis_miss(crx_conv[,1:15])
+miss_vars <- which(colSums(is.na(crx_conv[, 1:15])) > 0)
+co_missing_corr <- cor(is.na(crx_conv[, miss_vars]))
+round(co_missing_corr, 2)
+
+# Do missingness patterns differ by response class?
+crx_conv |>
+  mutate(response = as.factor(A16)) |>
+  mutate(across(starts_with("A"), as.character)) |>
+  pivot_longer(-response, names_to="variable", values_to="value") |>
+  group_by(response, variable) |>
+  summarize(pct_missing = mean(is.na(value)) * 100, .groups="drop") |>
+  pivot_wider(names_from = response, values_from = pct_missing) -> miss_by_resp
+miss_by_resp
+miss_by_resp |>
+  pivot_longer(-variable, names_to="response", values_to="pct_missing") |>
+  ggplot(aes(x=variable, y=pct_missing, fill=response)) +
+  geom_col(position="dodge") +
+  labs(title="Percent missing by variable and response", y="Percent missing") +
+  theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+The highest missingness percentage is A14 while the lowest is A03 and A08-A15, which all have zero.
+A04 and A05 are always missing together as well as A06 and A07.
+There seems to differ depending on each class as the ones with missingness precentages have different + and -.
+
+## Task 2
+
+```{r cache=TRUE}
+idx <- createDataPartition(crx_conv$A16, p=0.8, list=FALSE)
+train_full <- crx_conv[idx,]
+test_full <- crx_conv[-idx,]
+train_complete <- train_full |>
+  drop_na()
+tree_complete <- rpart(A16 ~ ., data=train_complete, method="class")
+rpart.plot(tree_complete, main="Tree trained on complete-cases")
+train_impute_input <- train_full |>
+  mutate(across(-A16, ~ if(is.numeric(.)) . else as.factor(.)))
+train_imputed <- missRanger(train_impute_input, pmm.k=5, num.trees=100, verbose=0)
+tree_imputed <- rpart(A16 ~ ., data=train_imputed, method="class")
+rpart.plot(tree_imputed, main="Tree trained on missRanger-imputed data")
+printcp(tree_complete)
+printcp(tree_imputed)
+```
+The model agrees on the most important predictor being A09. The complete-case was more deeper than the imputes test case, meaning the imputed was smoother. The complete-case used more variables than the imputed case, which mean the complete case is probably the better one for better generalization.
+
+## Task 3
+
+```{r cache=TRUE}
+test_adjusted <- test_full |>
+  drop_na()
+tmp_bind <- bind_rows(select(train_imputed, -A16), select(test_full, -A16))
+tmp_imp <- missRanger(tmp_bind, pmm.k=5, num.trees=100, verbose=0)
+test_imputed_all <- tmp_imp[(nrow(train_imputed)+1):nrow(tmp_imp), ]
+test_imputed_all$A16 <- test_full$A16
+pred_A_adjusted <- predict(tree_complete, newdata=test_adjusted, type="class")
+pred_A_orig_complete <- predict(tree_complete, newdata=test_adjusted, type="class")
+pred_B_imputed_all <- predict(tree_imputed, newdata=test_imputed_all, type="class")
+pred_B_adjusted <- predict(tree_imputed, newdata=test_adjusted, type="class")
+cm_A_adjusted <- confusionMatrix(pred_A_adjusted, test_adjusted$A16, positive="+")
+cm_A_orig_complete <- confusionMatrix(pred_A_orig_complete, test_adjusted$A16, positive="+")
+cm_B_imputed_all <- confusionMatrix(pred_B_imputed_all, test_imputed_all$A16, positive="+")
+cm_B_adjusted <- confusionMatrix(pred_B_adjusted, test_adjusted$A16, positive="+")
+cm_A_adjusted
+cm_A_orig_complete
+cm_B_imputed_all
+cm_B_adjusted
+summary_table <- tibble(
+  model = c("A_complete_train", "A_complete_train", "B_imputed_train", "B_imputed_train"),
+  testset = c("adjusted_test", "original_test_complete_rows", "original_test_imputed", "adjusted_test"),
+  accuracy = c(cm_A_adjusted$overall['Accuracy'], cm_A_orig_complete$overall['Accuracy'],
+               cm_B_imputed_all$overall['Accuracy'], cm_B_adjusted$overall['Accuracy']),
+  sensitivity = c(cm_A_adjusted$byClass['Sensitivity'], cm_A_orig_complete$byClass['Sensitivity'],
+                  cm_B_imputed_all$byClass['Sensitivity'], cm_B_adjusted$byClass['Sensitivity']),
+  specificity = c(cm_A_adjusted$byClass['Specificity'], cm_A_orig_complete$byClass['Specificity'],
+                  cm_B_imputed_all$byClass['Specificity'], cm_B_adjusted$byClass['Specificity'])
+)
+summary_table
+```
+The imputed case does not seem to improve accuracy compared to the complete-case. Sensitivity did not seem to improve either. This makes it clear that the complete-case (Model A) was a more reliable classifier.
+
+## Citations and Acknowledgements
+
+I used ChatGPT to help with bits of the code, for task 1.
+
