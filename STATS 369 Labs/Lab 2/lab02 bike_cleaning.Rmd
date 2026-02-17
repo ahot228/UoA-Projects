@@ -1,0 +1,90 @@
+---
+title: "Lab 2: Bike cleaning"
+author: "David Welch"
+output: html_document
+---
+
+## Cleaning the bike data with refinr
+
+```{r setup, include=FALSE}
+library(tidyverse)
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+In this lab we'll look at the cycle counter data from the first assignment. Essentially we'll answer the first question in the assignment about why it is hard to put the data in a tidy format.
+
+```{r}
+# choose the directory here which contain the three bike counter data files (and no other csv files!)
+bike_files<- list.files("~/Desktop/STATS 369/Lab 2/bikedata",pattern=".csv",full=TRUE)
+# we'll look at the map function next week - check out the help page if you like
+# here it iterates over each element of bike_files, applying read_csv to each
+bike_data<-map(bike_files,read_csv)
+```
+
+There are some columns that are entirely `NA`: get rid of them with `select_if`
+
+```{r}
+notallNA<-function(x) !all(is.na(x))
+# again using map - this tie applying the user defined function notallNA to each element of the list bike_data
+bike_data <- map(bike_data, select_if, notallNA)
+```
+
+Now we could try tidying the data
+
+```{r}
+# again using map - try to pivot_longer each dataframe in bike_data
+bike_tidy<-map(bike_data, pivot_longer, values_to ="rider_count", names_to ="counter",-Date)
+# turn list of data frames into a single data frame
+allbikes<-bind_rows(bike_tidy)
+allbikes %>% 
+  group_by(counter) %>% 
+  count() 
+```
+
+Even among the first few rows shown it is clear that `Curran St total`, `Curran Street Total`, and 
+`Curran Street Total Cyclists` should be the same. 
+
+## Task 
+
+1. Why have we got multiple names for what should be the same counter?
+
+Because it has been recorded by different people and they might have different ways of putting the names in, so ultimately there will be some counters that will be the same but have been recorded with slight changes to the name. It is clearyly a text prompt rather than a multiple choice.
+
+2. Figure out how you can merge these names together and get consistent column headers, by following instructions below. 
+    a. Load the `refinr` package and read the vignette. Try using `n_gram_merge()` and `key_collision_merge` on the `counter` variable.  Then try the `ignore_strings` argument to the functions, starting with `ignore_strings=c("cycle","counter","total","cyclists")`.
+    
+```{r}
+  library(refinr)
+  counter <- unique(allbikes$counter)
+  counter_edited <- n_gram_merge(counter, ignore_strings=c("cycle","counter","total","cyclists"))
+  counter_edited1 <- key_collision_merge(counter, ignore_strings = c("cycle", "counter", "total", "cyclists"))
+
+```
+    You won't be able to get all the way automatically: there's no way `refinr` can know that "Quay St Vector Arena" and "Quay St Spark Arena" are the same as each other but not the same as "Quay St Totem" so the next step requires some manual work. Before you do the next step just note that you do not have to be too picky here - it is ok if you aren't sure if some sites should be merged or not.
+    b. write out to a file a two-column table with the distinct original values of `counter` and the merged values. (use `unique` to get distinct values of a vector)
+```{r}
+write_csv(data.frame(counter = counter, counter_edited = counter_edited), "counter_names.csv")
+```
+    c. Edit the second column of this table **by hand** in a text editor or spreadsheet (it helps if it's in alphabetical order - so use `sort`).
+    d. Read the table back in and call it something like `name_table`, with column names `counter` and `counter_edited`
+```{r}
+name_table <- read_csv("counter_names.csv")
+```
+    e. Now, use a join on `counter` to add the edited name to the `allbikes` data set.  
+```{r}
+allbikes <- left_join(allbikes, name_table, by = "counter")
+allbikes$counter <- allbikes$counter_edited
+```
+3. Now tidy the data and plot a graph showing the day-of-week pattern for each counter. Since we haven't covered ggplot in detail yet, note that you can make single plot of rider count by weekday using something like `qplot(x = weekday, y = ridercount, data = bikedata)` and you can experiment with the `geom` option, perhaps trying `geom = "boxplot"` or `geom = "jitter"`. Now to make a similar plot for every counter, use facetting: simply add `+facet_wrap(~ counter, scales = "free_y" )` to your qplot call. Check you understand what the `scales = "free_y"` option is doing, and you may want to specify how many columns to include using the `ncol`option. If you like, experiment with other ways of plotting this!
+```{r}
+library(lubridate)
+allbikes <- allbikes %>%
+  mutate(Date = as.Date(Date, format = "%a %d %b %Y")) |>
+  mutate(weekday = wday(Date, label = TRUE))
+qplot(x = weekday, y = rider_count, data = allbikes, geom = "jitter")
+qplot(x = weekday, y = rider_count, data = allbikes, geom = "boxplot") +
+  facet_wrap(~ counter_edited.y, scales = "free_y")
+```
+
+
+*Note: there's a standalone package called 'OpenRefine' that's better than `refinr` but it's not installed on the lab computers*

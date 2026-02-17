@@ -1,0 +1,69 @@
+---
+title: "Lab 3"
+author: "Anish Hota"
+date: "2025-08-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+
+```{r}
+croc <- read_table("croc.txt")
+croc <- croc %>%
+  mutate(across(c(CBF, MTL, MBM, MRP),
+                ~ as.numeric(gsub(",", "", as.character(.x)))))
+glimpse(croc)
+croc <- croc %>%
+  mutate(
+    log_CBF = log10(CBF),
+    log_MTL = log10(MTL),
+    log_MBM = log10(MBM),
+    log_MRP = log10(MRP)
+  )
+```
+
+## Question 1
+
+```{r}
+croc_long <- croc %>%
+  select(log_CBF, log_MTL, log_MBM, log_MRP) %>%
+  pivot_longer(cols = -log_CBF, names_to = "variable", values_to = "value")
+
+ggplot(croc_long, aes(x = value, y = log_CBF)) +
+  geom_point(size = 3, alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  facet_wrap(~ variable, scales = "free_x") +
+  labs(
+    x = "Log-transformed Size/Shape Variables",
+    y = "Log Caniniform Bite Force (N)",
+    title = "Relationship between Caniniform Bite Force and Crocodilian Size/Shape"
+  ) +
+  theme_minimal()
+```
+## Question 2
+
+```{r}
+model <- lm(log_CBF ~ log_MTL + log_MBM, data = croc)
+summary(model)
+fossils <- tibble(
+  MTL = c(0.8, 11) * 100,
+  MBM = c(2.6, 4600),
+  TaxonOrder = c("Alligatoridea", "Alligatoridea")
+) %>%
+  mutate(
+    log_MTL = log10(MTL),
+    log_MBM = log10(MBM)
+  )
+
+pred_log <- predict(model, newdata = fossils)
+pred_force <- 10^pred_log
+
+fossils$pred_CBF <- pred_force
+fossils
+```
+
+
+
+

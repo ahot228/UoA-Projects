@@ -1,0 +1,107 @@
+---
+title: "Lab 5"
+author: "Anish Hota"
+date: "2025-08-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(splines)
+```
+
+## Set Up
+```{r cache = TRUE}
+seismic_29_files <- list.files("~/Desktop/STATS 369/Assignment 1/seismic/29", pattern = "*.csv", full.names = TRUE)
+read_hour_file <- function(file) {
+  # read file (two columns: unnamed + x)
+  df <- read_csv(file, col_names = c("row_id", "x"))
+  
+  # extract hour from filename (e.g., "0.sac.csv" -> 0)
+  hour_val <- as.numeric(str_extract(basename(file), "^\\d+"))
+  
+  df |>
+    mutate(
+      hour = hour_val,
+      minute_in_hour = (row_number() - 1) %/% 1080,  # chunk every 1080 rows
+      datetime = ymd_hms("2025-01-29 00:00:00", tz = "UTC") +
+                 hours(hour_val) +
+                 minutes(minute_in_hour)
+    )
+}
+seismic_29 <- seismic_29_files |>
+  map_df(read_hour_file)
+seismic_28_files <- list.files("~/Desktop/STATS 369/Assignment 1/seismic/28", pattern = "*.csv", full.names = TRUE)
+seismic_28 <- seismic_28_files |>
+  map_df(read_hour_file)
+```
+
+# Plots
+```{r cache = TRUE}
+seismic_29 <- seismic_29 |>
+  mutate(minute_in_day = as.numeric(hour) * 60 + as.numeric(minute_in_hour))
+seismic_28 <- seismic_28 |>
+  mutate(minute_in_day = as.numeric(hour) * 60 + as.numeric(minute_in_hour))
+
+data_minute_29 <- seismic_29 |>
+  group_by(minute_in_day) |>
+  summarise(sd_seismic_29 = sd(x), .groups = "drop")
+data_minute_28 <- seismic_28 |>
+  group_by(minute_in_day) |>
+  summarise(sd_seismic_28 = sd(x), .groups = "drop")
+
+fit_lin_29 <- lm(sd_seismic_29 ~ bs(minute_in_day, knots = seq(0, 1440, by = 360), degree = 1),
+              data = data_minute_29)
+fit_cub_29 <- lm(sd_seismic_29 ~ bs(minute_in_day, knots = seq(0, 1440, by = 360), degree = 3),
+              data = data_minute_29)
+fit_harm_29 <- lm(sd_seismic_29 ~ sin(2*pi*minute_in_day/1440) + cos(2*pi*minute_in_day/1440),
+               data = data_minute_29)
+
+fit_lin_28 <- lm(sd_seismic_28 ~ bs(minute_in_day, knots = seq(0, 1440, by = 360), degree = 1),
+              data = data_minute_28)
+fit_cub_28 <- lm(sd_seismic_28 ~ bs(minute_in_day, knots = seq(0, 1440, by = 360), degree = 3),
+              data = data_minute_28)
+fit_harm_28 <- lm(sd_seismic_28 ~ sin(2*pi*minute_in_day/1440) + cos(2*pi*minute_in_day/1440),
+               data = data_minute_28)
+
+newdata_29 <- tibble(minute_in_day = 0:1415)
+newdata_29 <- newdata_29 %>%
+  mutate(
+    pred_lin_29 = predict(fit_lin_29, newdata_29 = newdata_29),
+    pred_cub_29 = predict(fit_cub_29, newdata_29 = newdata_29),
+    pred_harm_29 = predict(fit_harm_29, newdata_29 = newdata_29)
+  )
+
+newdata_28 <- tibble(minute_in_day = 0:1415)
+newdata_28 <- newdata_28 %>%
+  mutate(
+    pred_lin_28 = predict(fit_lin_28, newdata_28 = newdata_28),
+    pred_cub_28 = predict(fit_cub_28, newdata_28 = newdata_28),
+    pred_harm_28 = predict(fit_harm_28, newdata_28 = newdata_28)
+  )
+
+ggplot() +
+  geom_point(data = data_minute_29, aes(x = minute_in_day, y = sd_seismic_29),
+             color = "grey70", size = 0.5, alpha = 0.5) +
+  geom_line(data = newdata_29, aes(x = minute_in_day, y = pred_lin_29, color = "Linear spline")) +
+  geom_line(data = newdata_29, aes(x = minute_in_day, y = pred_cub_29, color = "Cubic spline")) +
+  geom_line(data = newdata_29, aes(x = minute_in_day, y = pred_harm_29, color = "Harmonic")) +
+  labs(title = "Seismic Noise Fitted Models 29th",
+       x = "Minute of Day",
+       y = "SD of displacement",
+       color = "Model") +
+  theme_minimal()
+
+ggplot() +
+  geom_point(data = data_minute_28, aes(x = minute_in_day, y = sd_seismic_28),
+             color = "grey70", size = 0.5, alpha = 0.5) +
+  geom_line(data = newdata_28, aes(x = minute_in_day, y = pred_lin_28, color = "Linear spline")) +
+  geom_line(data = newdata_28, aes(x = minute_in_day, y = pred_cub_28, color = "Cubic spline")) +
+  geom_line(data = newdata_28, aes(x = minute_in_day, y = pred_harm_28, color = "Harmonic")) +
+  labs(title = "Seismic Noise Fitted models 28th",
+       x = "Minute of Day",
+       y = "SD of displacement",
+       color = "Model") +
+  theme_minimal()
+```

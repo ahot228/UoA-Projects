@@ -1,0 +1,58 @@
+---
+title: 'Lab 1: Wikipedia searches'
+author: "Anish Hota"
+date: "24/07/2025"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Task
+
+```{r}
+library(tidyverse)
+events.df <- read_csv("events_log.csv")
+```
+
+
+1. What is the overall clickthrough rate? (if you are unsure what "clickthrough rate" means exactly, see hints below)
+```{r}
+totalsessions <- events.df |>
+  distinct(session_id)
+clickthrough <- events.df |>
+  filter(action == "visitPage") |>
+  distinct(session_id)
+total_clickthrough_rate <- nrow(clickthrough)/nrow(totalsessions)
+total_clickthrough_rate
+```
+
+2. How does the click through rate vary between the groups?
+```{r}
+ctr_group <- events.df |>
+  group_by(group) |>
+  summarise(ctr = nrow(clickthrough)/ n()) |>
+  ungroup()
+ctr_group
+```
+
+3. How does the click through rate vary by day? How about by group and by day together?
+```{r}
+day.df <- events.df |>
+  mutate(time = ymd_hms(timestamp))
+
+ctr_day <- day.df |>
+  group_by(day(time)) |>
+  summarise(ctr = nrow(clickthrough)/ n()) |>
+  ungroup()
+ctr_day
+```
+
+```{r}
+ctr_group_day <- day.df |>
+  group_by(group, day(time)) |>
+  summarise(ctr = nrow(clickthrough)/ n()) |>
+  ungroup()
+ctr_group_day
+```

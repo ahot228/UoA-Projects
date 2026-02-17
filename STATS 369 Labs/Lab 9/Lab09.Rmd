@@ -1,0 +1,100 @@
+---
+title: "Lab 9 STATS 369"
+author: "Anish Hota"
+date: "2025-10-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+```{r cache=TRUE}
+library(caret)
+library(tidyverse)
+my_sample <- sample(241600, 500)
+df <- read_csv("sgemm_product.csv",
+                          col_names = c("MWG","NWG","KWG","MDIMC","NDIMC",
+                                        "MDIMA","NDIMB","KWI","VWM","VWN",
+                                        "STRM","STRN","SA","SB",
+                                        "Run1","Run2","Run3","Run4")) |>
+  slice(my_sample) |>
+  mutate (logrun1 = log(as.numeric(Run1)))
+
+X <- as.matrix(df[, 1:14])
+y <- df$logrun1
+
+set.seed(427632295)
+train_idx <- createDataPartition(y, p = 0.8, list = FALSE)
+X_train <- X[train_idx, ]
+X_test  <- X[-train_idx, ]
+y_train <- y[train_idx]
+y_test  <- y[-train_idx]
+
+scaler <- preProcess(X_train, method = c("center", "scale"))
+X_train <- predict(scaler, X_train)
+X_test  <- predict(scaler, X_test)
+```
+
+## Q2
+
+```{r cache=TRUE}
+model1 <- keras_model_sequential() |>
+  layer_dense(units = 8, activation = "relu", input_shape = ncol(X_train)) %>%
+  layer_dense(units = 1)  # linear output for regression
+
+model1 |> 
+  compile(
+  optimizer = "adam",
+  loss = "mse",
+  metrics = "mae"
+)
+
+history1 <- model1 |> 
+  fit(
+  X_train, y_train,
+  validation_split = 0.2,
+  epochs = 50,
+  batch_size = 32,
+  verbose = 1
+)
+
+results1 <- model1 |>
+  evaluate(X_test, y_test, verbose = 0)
+cat("Model 1 — Test MSE:", results1["loss"], "Test MAE:", results1["mae"], "\n")
+```
+
+## Q2
+
+```{r cache=TRUE}
+model2 <- keras_model_sequential() |>
+  layer_dense(units = 8, activation = "relu", input_shape = ncol(X_train)) |>
+  layer_dense(units = 4, activation = "relu") |>
+  layer_dense(units = 1)
+
+model2 |>
+  compile(
+  optimizer = "adam",
+  loss = "mse",
+  metrics = "mae"
+)
+
+history2 <- model2 |>
+  fit(
+  X_train, y_train,
+  validation_split = 0.2,
+  epochs = 50,
+  batch_size = 32,
+  verbose = 1
+)
+
+results2 <- model2 |>
+  evaluate(X_test, y_test, verbose = 0)
+cat("Model 2 — Test MSE:", results2["loss"], "Test MAE:", results2["mae"], "\n")
+```
+
+## Citations and Acknowledgements
+I was unable to load keras, as when I install tensorflow, I keep getting of a valid installation problem, I tried changing the version of to apporpiate for a macos M1 chip but it would not work, this is even after installing reticulate as well. The R session kept restarting and I had to load the libraries and install them over and over. I also used ChatGPT to help with my problem and some of the model building.
+

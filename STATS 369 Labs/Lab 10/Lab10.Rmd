@@ -1,0 +1,205 @@
+---
+title: "Lab 10 STATS 369"
+author: "Anish Hota"
+date: "2025-10-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+
+```{r cache=TRUE}
+library(tidyverse)
+library(data.table)
+library(tidytext)
+library(glmnet)
+library(wordcloud)
+library(RColorBrewer)
+got_csv <- "Game_of_Thrones_Script.csv"
+glove_file <- "glove.42B.300d.txt"
+got <- fread(got_csv, encoding = "UTF-8", showProgress = FALSE) |>
+  as_tibble()
+got <- got |>
+  mutate(
+    Season = as.integer(str_extract(Season, "\\d+")),
+    Episode = as.integer(str_extract(Episode, "\\d+")),
+    Name = str_squish(Name),
+    Sentence = as.character(Sentence)
+  )
+```
+
+# Q1
+
+```{r cache=TRUE}
+name_counts <- got |>
+  group_by(Name) |>
+  summarise(lines = n(), .groups = "drop") |>
+  arrange(desc(lines))
+
+top5 <- name_counts |> slice_head(n = 5)
+top5
+got_top5 <- got |>
+  filter(Name %in% top5$Name) |>
+  group_by(Name, Season) |>
+  summarise(lines = n(), .groups = "drop")
+
+p1 <- ggplot(got_top5, aes(x = Season, y = lines, color = Name)) +
+  geom_line(linewidth = 1) + geom_point() +
+  labs(title = "Lines Per Season (Top 5 Characters)",
+       x = "Season", y = "Number of lines") +
+  theme_minimal() +
+  scale_x_continuous(breaks = sort(unique(got_top5$Season)))
+p1
+```
+
+# Q2
+
+** Unable to run the glove as it crashes my laptop but here is the code I tried in the end, afte trying the way in the readme file, which didn't work either
+
+read_glove <- function(glove_path) {
+  lines <- readLines(glove_path, n = 5)
+  dims <- length(strsplit(lines[1], " ")[[1]]) - 1
+  df <- data.table::fread(glove_path, header = FALSE, sep = " ", quote = "", encoding = "UTF-8")
+  words <- df[[1]]
+  mat <- as.matrix(df[, -1, with = FALSE])
+  rownames(mat) <- words
+  mat
+}
+glove <- read_glove(glove_file)
+bing <- get_sentiments("bing")
+bing <- bing |>
+  distinct(word, sentiment)
+bing <- bing |>
+  mutate(label = ifelse(sentiment == "positive", 1, 0))
+matched <- bing |>
+  filter(word %in% rownames(glove))
+cat("Matched", nrow(matched), "lexicon words with GloVe vectors (out of", nrow(bing), "bing words)\n")
+X_train <- glove[matched$word, , drop = FALSE]
+y_train <- matched$label
+set.seed(427632295)
+cv <- cv.glmnet(X_train, y_train, family = "binomial", alpha = 0, type.measure = "deviance", nfolds = 5)
+model <- cv$glmnet.fit
+best_lambda <- cv$lambda.min
+cat("Trained glmnet. best lambda:", best_lambda, "\n")
+pred_prob <- predict(cv, newx = glove, type = "response", s = "lambda.min")
+pred_prob_vec <- as.numeric(pred_prob)
+names(pred_prob_vec) <- rownames(glove)
+tokenized <- got |>
+  select(Season, Episode, Name, Sentence) |>
+  mutate(line_id = row_number()) |>
+  unnest_tokens(word, Sentence, token = "words", to_lower = TRUE)
+tokenized <- tokenized |>
+  filter(word %in% names(pred_prob_vec))
+tokenized <- tokenized |>
+  mutate(word_sent = pred_prob_vec[word])
+line_sentiment <- tokenized %>%
+  group_by(line_id) |>
+  summarise(
+    sentiment = mean(word_sent, na.rm = TRUE),
+    n_words = n(),
+    .groups = "drop"
+  )
+got <- got |>
+  mutate(line_id = row_number())
+got <- left_join(got, line_sentiment, by = "line_id")
+
+```{r cache=TRUE}
+pos_words <- readLines("positive-words.txt", warn = FALSE)
+neg_words <- readLines("negative-words.txt", warn = FALSE)
+tokenized <- got |>
+  select(Season, Episode, Name, Sentence) |>
+  mutate(line_id = row_number()) |>
+  unnest_tokens(word, Sentence, token = "words", to_lower = TRUE)
+tokenized <- tokenized |>
+  mutate(
+    sentiment_word = case_when(
+      word %in% pos_words ~ 1,
+      word %in% neg_words ~ -1,
+      TRUE ~ 0
+    )
+  )
+line_sentiment <- tokenized |>
+  group_by(line_id) |>
+  summarise(
+    sentiment = ifelse(sum(abs(sentiment_word)) > 0,
+                       mean(sentiment_word),
+                       NA_real_),
+    .groups = "drop"
+  )
+got <- got |>
+  mutate(line_id = row_number()) |>
+  left_join(line_sentiment, by = "line_id")
+```
+
+```{r cache=TRUE}
+top5_chars <- top5$Name
+s1_top5 <- got |>
+  filter(Season == 1, Name %in% top5_chars) |>
+  filter(!is.na(sentiment))
+
+s1_ep <- s1_top5 |>
+  group_by(Name, Episode) |>
+  summarise(mean_sent = mean(sentiment, na.rm = TRUE), lines = n(), .groups = "drop")
+
+p2 <- ggplot(s1_ep, aes(x = Episode, y = mean_sent, color = Name)) +
+  geom_line(linewidth = 1) + geom_point() +
+  labs(title = "Season 1: Average Line Sentiment Per Episode (Top 5 characters)",
+       x = "Episode", y = "Mean Sentiment (Prob of Positive)") +
+  theme_minimal() +
+  scale_x_continuous(breaks = sort(unique(s1_ep$Episode)))
+p2
+```
+
+# Q3
+
+```{r cache=TRUE}
+top_char <- top5_chars[2]
+
+char_lines <- got |>
+  filter(Name == top_char) |>
+  arrange(Season, Episode, line_id) |>
+  mutate(line_index = row_number()) |>
+  select(line_id, Season, Episode, Sentence, sentiment,line_index)
+
+p3 <- ggplot(char_lines, aes(x = line_index, y = sentiment)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "loess", se = TRUE) +
+  labs(title = "Sentiment trajectory For Jon Snow",
+       x = "Line Index", y = "Line Sentiment") +
+  theme_minimal()
+p3
+```
+
+# Q4
+
+```{r cache=TRUE}
+char_tokens <- got |>
+  filter(Name == top_char) |>
+  select(Sentence) |>
+  unnest_tokens(word, Sentence, token = "words") %>%
+  count(word, sort = TRUE)
+char_tokens <- char_tokens |>
+  filter(word %in% c(pos_words, neg_words)) |>
+  mutate(
+    sentiment = case_when(
+      word %in% pos_words ~ "positive",
+      word %in% neg_words ~ "negative"
+    )
+  )
+colors <- c("positive" = "red3", "negative" = "blue3")
+set.seed(427632295)
+wordcloud(
+  words = char_tokens$word,
+  freq = char_tokens$n,
+  scale = c(4, 0.5),
+  random.order = FALSE,
+  colors = colors[char_tokens$sentiment]
+)
+```
+
+# Citations and Acknowledgments
+
+I used ChatGPT to help with Q3 and Q4. As stated earlier I was unable to use the glove because my PC would crash as the file is too large, so instead I did the questions with just the postive and negaative words txt files that were given.

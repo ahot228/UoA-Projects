@@ -1,0 +1,157 @@
+---
+title: "Lab 07 STATS 369"
+author: "Anish Hota"
+date: "2025-10-01"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+```{r cahce = TRUE}
+library(tidyverse)
+library(lubridate)
+library(randomForest)
+library(geosphere)
+library(janitor)
+seed <- 295
+sample_frac_size <- 0.2
+input_file <- "~/Desktop/STATS 369/Lab 7/nyc_taxi_week2.csv"
+raw <- read_csv(input_file, guess_max = 10000) |> clean_names()
+possible_datetime_cols <- c("pickup_datetime", "tpep_pickup_datetime", "starttime", "pickup_time", "pickup_ts", "datetime", "date_time")
+dt_col <- intersect(possible_datetime_cols, names(raw))
+if (length(dt_col) >= 1) {
+dt_col <- dt_col[1]
+} else {
+dt_col <- names(raw)[str_detect(names(raw), "pickup.*(time|date|datetime)")]
+if (length(dt_col) >= 1) dt_col <- dt_col[1] else dt_col <- NULL
+}
+if (!is.null(dt_col)) {
+raw <- raw %>% mutate(pickup_dt = parse_date_time(!!sym(dt_col), orders = c("Ymd HMS", "Y-m-d H:M:S", "Y/m/d H:M:S", "mdy HMS", "ymd HMS", "dmy HMS"), tz = "UTC"))
+} else {
+stop("No pickup datetime column detected. Check your column names and adjust possible_datetime_cols in the script.")
+}
+```
+
+## Q1
+```{r cahce = TRUE}
+pay_cols <- intersect(c("payment_type", "paymentmethod", "payment_method", "payment"), names(raw))
+pay_col <- ifelse(length(pay_cols) >= 1, pay_cols[1], NA)
+credit_patterns <- c("credit", "card", "crd", "cc")
+set.seed(seed)
+df <- raw |>
+mutate(
+pickup_dt = as_datetime(pickup_dt),
+day_of_week = wday(pickup_dt, label = TRUE, abbr = TRUE, week_start = 1),
+hour_of_day = hour(pickup_dt)
+)
+if (!is.na(pay_col)) {
+df <- df |> filter(if_else(is.na(!!sym(pay_col)), FALSE,
+str_detect(tolower(as.character(!!sym(pay_col))), paste(credit_patterns, collapse = "|"))))
+} else {
+message("No payment-type column found; skipping credit-card filter. If you have such a column, rename it to one of: payment_type, paymentmethod, payment_method, payment.")
+}
+df_sub <- df |> sample_frac(sample_frac_size)
+cat("\n---- glimpse of the 20% subsample ----\n")
+print(glimpse(df_sub))
+```
+
+## Q2
+```{r cahce = TRUE}
+pick_lat <- intersect(c("pickup_latitude", "pickup_lat"), names(df_sub)) %>% purrr::pluck(1, .default = NA)
+pick_lon <- intersect(c("pickup_longitude", "pickup_lon"), names(df_sub)) %>% purrr::pluck(1, .default = NA)
+
+
+if (is.na(pick_lat) | is.na(pick_lon)) stop("No pickup latitude/longitude columns found.")
+
+
+fare_col <- intersect(c("fare_amount", "fare", "total_amount"), names(df_sub)) %>% purrr::pluck(1, .default = NA)
+
+
+# dropoff columns
+drop_lat <- intersect(c("dropoff_latitude", "dropoff_lat"), names(df_sub)) %>% purrr::pluck(1, .default = NA)
+drop_lon <- intersect(c("dropoff_longitude", "dropoff_lon"), names(df_sub)) %>% purrr::pluck(1, .default = NA)
+
+
+cleaned <- df_sub %>%
+mutate(
+pickup_lat = as.numeric(!!sym(pick_lat)),
+pickup_lon = as.numeric(!!sym(pick_lon)),
+fare_amount = if (!is.na(fare_col)) as.numeric(!!sym(fare_col)) else NA_real_
+)
+
+
+# compute distance only for complete rows
+if (!is.na(drop_lat) & !is.na(drop_lon)) {
+cleaned <- cleaned %>%
+mutate(
+dropoff_lat = as.numeric(!!sym(drop_lat)),
+dropoff_lon = as.numeric(!!sym(drop_lon))
+)
+
+complete_idx <- complete.cases(
+  cleaned$pickup_longitude, cleaned$pickup_latitude,
+  cleaned$dropoff_longitude, cleaned$dropoff_latitude
+)
+cleaned$trip_distance_m <- NA_real_
+cleaned$trip_distance_m[complete_idx] <- distHaversine(
+  cbind(cleaned$pickup_longitude[complete_idx], cleaned$pickup_latitude[complete_idx]),
+  cbind(cleaned$dropoff_longitude[complete_idx], cleaned$dropoff_latitude[complete_idx])
+)
+}
+
+
+median_lat <- median(cleaned$pickup_latitude, na.rm = TRUE)
+median_lon <- median(cleaned$pickup_longitude, na.rm = TRUE)
+
+
+cleaned <- cleaned %>%
+filter(
+is.finite(pickup_lat), is.finite(pickup_lon),
+pickup_lat >= -90, pickup_lat <= 90,
+pickup_lon >= -180, pickup_lon <= 180,
+abs(pickup_lat - median_lat) <= 1.0,
+abs(pickup_lon - median_lon) <= 1.0
+)
+
+
+if (!is.na(fare_col)) {
+cleaned <- cleaned %>% filter(!is.na(fare_amount), fare_amount > 0, fare_amount <= 500)
+}
+
+
+if ("trip_distance_m" %in% names(cleaned)) {
+cleaned <- cleaned %>% filter(is.na(trip_distance_m) | trip_distance_m > 50)
+cat("\nAfter cleaning, nrows =", nrow(cleaned), "\n")
+```
+
+## Q3
+```{r cahce = TRUE}
+model_df <- cleaned %>%
+mutate(
+day_of_week = factor(day_of_week, levels = levels(day_of_week)),
+hour_of_day = factor(hour_of_day)
+) %>%
+select(fare_amount, pickup_lat, pickup_lon, day_of_week, hour_of_day) %>%
+drop_na()
+
+
+rf_fit <- randomForest(fare_amount ~ pickup_lat + pickup_lon + day_of_week + hour_of_day,
+data = model_df,
+ntree = 500,
+importance = TRUE)
+
+
+print(rf_fit)
+imp <- importance(rf_fit)
+print(imp)
+varImpPlot(rf_fit, main = "Variable importance for taxi fare RF model")
+
+
+save(rf_fit, model_df, file = "rf_taxi_model.RData")
+cat("\nSaved rf_taxi_model.RData with rf_fit and model_df.\n")
+```

@@ -1,0 +1,108 @@
+---
+title: 'Stat 369 Lab 6: Autism trees'
+author: 'Anish Hota'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rpart)
+library(rpart.plot)
+```
+
+This lab looks at data collected to try to detect autism spectrum disorder (ASD) biochemically. (note: remove the non-biochemical variable).
+
+We use trees to detect ASD.
+
+Submit a knitted html or pdf of your answer to Canvas.
+
+## Tasks
+
+0. Note you need to be careful when reading in the data - have a look at the file before you read it in and figure out how to read it without manually changing the file.
+```{r cache=TRUE}
+df <- read_csv("S1Dataset.csv")
+clean_df <- df |>
+  mutate(across(everything(), ~ suppressWarnings(as.numeric(.x)))) |>
+  mutate(Group = df$Group)
+features <- c("SAM/SAH","% DNA methylation","fGSH/GSSG","tGSH/GSSG",
+"fCystine/fCysteine","% oxidized", "Vineland ABC")
+train_df <- df %>%
+  mutate(across(where(is.character), ~na_if(.x, ""))) |> 
+  mutate(across(!Group, as.numeric)) |>           
+  filter(Group %in% c("ASD","NEU")) |>
+  mutate(Group = factor(Group)) |>                         
+  select(Group, any_of(features))
+```
+
+1. Use `rpart()` to grow a tree that distinguishes the ASD and NEU groups, and give the confusion matrix and the proportion of people (from these two groups) correctly classified. Plot the tree (showing labels -- make sure you set the margin in the plot call to make room for the labels).
+```{r cache=TRUE}
+fit1 <- rpart(Group ~ ., data=train_df, method="class")
+pred1 <- predict(fit1, type="class")
+results1 <- tibble(True = train_df$Group, Pred = pred1)
+conf1 <- table(results1)
+conf1
+mean(results1$True == results1$Pred)
+results1 |>
+  group_by(True) |>
+  summarise(acc = mean(True==Pred))
+rpart.plot(fit1, main="Default tree")
+```
+
+2. The dataset makes the classifier look good, because the number of ASD and neurotypical participants are equal.  In reality, ASD affects about 1.5% of people.  Run `rpart()` with the prior argument (see the help page), to build a tree based on population prior probabilities of 0.015 and 0.985. Report the confusion matrix and the proportion of ASD and NEU groups correctly classified. Plot the tree.
+```{r cache=TRUE}
+fit2 <- rpart(Group ~ ., data=train_df, method="class",
+parms=list(prior=c(0.015, 0.985)))
+pred2 <- predict(fit2, type="class")
+results2 <- tibble(True = train_df$Group, Pred = pred2)
+table(results2)
+mean(results2$True == results2$Pred)
+results2 |>
+  group_by(True) |>
+  summarise(acc = mean(True==Pred))
+rpart.plot(fit2, main="Tree with population priors")
+```
+
+3. Suppose that false negative classifications (missing ASD) are thought to be more important than false positive (suspecting ASD). Run `rpart()` with the `prior` argument as in the previous question and also with the `loss` argument saying that false negatives are 10 times as bad as false positives.
+Report the confusion matrix and the proportion of ASD and NEU  groups correctly classified. Plot the tree. Did you get the result you expected? 
+```{r cache=TRUE}
+lossmat <- matrix(c(0,10, 1,0), nrow=2)
+fit3a <- rpart(Group ~ ., data=train_df, method="class",
+parms=list(prior=c(0.015,0.985), loss=lossmat))
+pred3a <- predict(fit3a, type="class")
+results3a <- tibble(True = train_df$Group, Pred = pred3a)
+table(results3a)
+mean(results3a$True == results3a$Pred)
+results3a |>
+  group_by(True) |>
+  summarise(acc = mean(True==Pred))
+rpart.plot(fit3a, main="Tree with priors + 10x FN cost")
+```
+Both ASD and NEU were correctly classified.
+
+Now do the same except set the penalty for false negatives to 100 times.
+```{r cache=TRUE}
+lossmat100 <- matrix(c(0,100, 1,0), nrow=2)
+fit3b <- rpart(Group ~ ., data=train_df, method="class",
+parms=list(prior=c(0.015,0.985), loss=lossmat100))
+pred3b <- predict(fit3b, type="class")
+results3b <- tibble(True = train_df$Group, Pred = pred3b)
+table(results3b)
+mean(results3b$True == results3b$Pred)
+results3b %>% group_by(True) %>% summarise(acc = mean(True==Pred))
+rpart.plot(fit3b, main="Tree with priors + 100x FN cost")
+```
+With this ASD was classified well but some NEU were not.
+
+4. Use this final tree to predict for the SIB group (all of whom are actually neurotypical). What proportion are correctly classified?
+```{r cache=TRUE}
+sib_df <- clean_df |>
+  filter(Group=="SIB") |>
+  select(all_of(features))
+pred_sib <- predict(fit3b, newdata=sib_df, type="class")
+mean(pred_sib=="NEU")
+```
+About 80.85% were correctly classified as NEU to be the final tree.
+
+## Citations and Acknowledgments
+Used ChatGPT to help out with reading the data in part 0.
